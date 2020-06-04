@@ -13,7 +13,7 @@ output:
     latex_engine: xelatex
     number_sections: yes
     toc: yes
-    toc_depth: 2
+    toc_depth: 3
   html_document:
     df_print: paged
     toc: yes
@@ -42,8 +42,8 @@ geometry: margin=2cm
 ```{r setup, include=FALSE}
 require(knitr)
 knitr::opts_chunk$set(
-	fig.height = 5.5,
-	fig.width = 5.5,
+  fig.width = 5,
+  fig.height = 5,
 	message = FALSE,
 	warning = FALSE,
 	cache = FALSE,
@@ -104,13 +104,13 @@ ELI-SFI
 
 El archivo proporcionado `targets.csv` contiene la información de las muestras de un estudio obtenido del repositorio (GTEx1). Este repositorio contiene datos de múltiples tipos en un total de 54 tejidos. Nos centramos en los datos de expresión (RNA-seq) pertenecientes a un análisis del tiroides en donde se compara tres tipos de infiltración medido en un total de 292 muestras pertenecientes a tres grupos:
 
-• Not infiltrated tissues (NIT): 236 muestras
-• Small focal infiltrates (SFI): 42 muestras
-• Extensive lymphoid infiltrates (ELI): 14 muestras.
+- Not infiltrated tissues (NIT): 236 muestras
+- Small focal infiltrates (SFI): 42 muestras
+- Extensive lymphoid infiltrates (ELI): 14 muestras
 
 Los datos ya se encuentran preprocesados y emplearemos una selección aleatoria de 30 muestras, 10 de cada grupo.
 
-Con la información de la muestras (subset) obtenidas, se han *subseteado* estas columnas con el archivo tambien proporcionado `counts.csv` que contiene una matriz de contaje que informa, para cada muestra, el número de fragmentos de secuencia que se han asignado a cada gen, de los diferentes genes de las muestras estudiadas contenidas en `targets`.
+Con la información de la muestras (subset) obtenidas, se han *subseteado* estas columnas con el archivo tambien proporcionado `counts.csv` que contiene una matriz de contaje que informa, para cada muestra, el número de fragmentos de secuencia que se han asignado a cada gen, de los diferentes genes de las muestras estudiadas, contenidas en `targets`.
 
 ## Métodos y herramientas empleados
 
@@ -141,14 +141,13 @@ Básicamente los pasos seguidos son:
 
 Se han empleado dos paquetes de Bioconductor: edgeR [@robinson2010edger] y DESeq2 [@love2014differential] para el análisis de los datos bajo el test Binomial Negativo, ya que ambos paquetes poseen un material estadístico potente, especialmente DESeq2. Su método de normalización es el denominado RPKM (Reads Per Kilobase of transcript and Million mapped reads). Así, la normalización previa en este paquete no es necesaria, lo cual es una ventaja. Aun asi, se ha empleado tambien el paquete edgeR para poder tener mas referencias.
 
-### Procedimiento detallado
+## Procedimiento detallado
 
-#### Lectura de los datos
+### Lectura de los datos
 
 En primer lugar veamos ambos archivos de los que disponemos. La tabla de contajes (counts) y la tabla de muestras (targets) proporcionadas:
 
 ```{r datos1, include=FALSE}
-
 library(readr)
 library(knitr)
 counts <- read_delim(file=file.path(params$folder.data,params$file1),";",
@@ -164,12 +163,9 @@ targets <- read_delim(file=file.path(params$folder.data,params$file2),",",
 ```
 
 ```{r echo=FALSE}
-length(complete.cases(targets))
-
 head(counts, caption = "tabla de contajes")[,1:3]
 head(targets, caption = "tabla de las muestras")[,1:5]
 ```
-
 
 El nombre de las filas en `counts` pertenece a las claves de tipo "ENSEMBL", conteniendo un punto y la versión de éste. Eliminamos la version y el punto para que posteriormente podamos emplear la AnnotationDBI para mapear mediante DESeq, si es necesario. Por otro lado, convertimos la matriz de caracteres a numericos con el nombre de cada fila y columna, para poder trabajar con ellas. De esta forma nos quedan las siguientes tablas con las que vamos a trabajar y vemos las dimensiones de cada una de ellas para comprobar que estan completas:
 
@@ -184,18 +180,28 @@ colnames(conteos) <- colnames(counts[,-1])
 
 conteos.data.frame <- as.data.frame(conteos)
 
-length(complete.cases(conteos)) # comprobamos que el dataset está completo
+#length(complete.cases(conteos)) # comprobamos que el dataset está completo
 
 targets <- read_delim(file=file.path(params$folder.data,params$file2),",",
                       col_names = TRUE)
-length(complete.cases(targets))
+#length(complete.cases(targets))
 
 head(conteos.data.frame, caption = "tabla de contajes")[,1:3]
 head(targets, caption = "tabla de las muestras")[,1:5]
 
 ```
 
-#### Selección de las 30 muestras
+Dimensión matriz de conteos:
+```{r echo=FALSE}
+dim(conteos.data.frame)
+```
+
+Dimensión matriz de las muestras:
+```{r echo=FALSE}
+dim(targets)
+```
+
+### Selección de las 30 muestras
 
 Con el fin de obtener una selección de 30 muestras, 10 de cada tipo, de la tabla `targets` se ha creado el siguiente script. Como vemos, se ha incluido una semilla para que los mismos datos puedan ser reproducibles. Además se ha tenido en cuenta que existe una columna en la tabla que nos indica el tipo de muestra: "RNA Seq (NGS)" y "Allele-Specific Expression". Ya que solo nos interesan las muestras "RNA Seq (NGS)" en nuestro análisis, se ha incluido este filtro en la selección además del grupo. Sin ambargo, con este filtro el grupo *ELI* se quedaría solo con 8 muestras, por lo que no se ha incluido este filtro en este grupo, para que cada grupo tenga la misma proporción de muestras.
 
@@ -206,59 +212,49 @@ n <- 10
 library(dplyr)
 
 #Grupo NIT
-
 muestra_nit <- targets %>%
   filter(Group=="NIT" & molecular_data_type == "RNA Seq (NGS)") %>%
   sample_n(size=n,replace=FALSE)
 
 #Grupo ELI
-
 muestra_eli <- targets %>%
   filter(Group=="ELI") %>%
   sample_n(size=n,replace=FALSE)
 
 #Grupo SFI
-
 muestra_sfi <- targets %>%
   filter(Group=="SFI" & molecular_data_type == "RNA Seq (NGS)") %>%
   sample_n(size=n,replace=FALSE)
 
 #Unir los grupos en un data frame
-
 subset <- rbind(muestra_nit,muestra_eli, muestra_sfi)
-head(subset)[,1:5]
-#write.table(subset, "./datos/subset.csv") #Guardamos la tabla en nuestra ruta de trabajo
-
+head(subset)[,1:5] #primeras 6 filas del archivo
 ```
 
-#### Crear la matriz con las dimensiones del subset
+### Crear la matriz con las dimensiones del subset
 
 Este paso es fundamental ya que es la tabla que vamos a emplear en nuestro análisis. Debemos ajustar la tabla counts proporcionada con las dimensiones y los datos de nuestra muestra escogida de forma aleatoria. Esta nueva tabla se llama `counts.subset` y comprobamos que las dimensiones de la misma se corresponde con el número de filas de la tabla `counts` 56202 y el número de columnas de nuestra tabla de 30 muestras.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
 library(dplyr)
-
 counts.subset<- dplyr::select(conteos.data.frame, contains(subset$Sample_Name))
 dim(counts.subset)
-
 ```
 
-#### Análisis con el paquete edgeR
+### Análisis con el paquete edgeR
 
 Ya que el paquete DESeq2 realiza la normalización de forma automática, separamos aqui el análisis de los dos paquetes.
 
-##### Preparación de los datos: Anotacion, filtrado y normalización
+#### Preparación de los datos: Anotación, filtrado y normalización
 
 Esta estapa incluye dos pasos muy importantes antes del análisis: filtrado de genes con baja o nula expresión y evaluación de la calidad de los datos.
 
-Pero antes, creamos el objeto DGEList a partir de la matriz de conteos y la información de las muestras, es decir, cada uno de los tipos (ELI, NIT, SFI) incluidos en la columna `Group` y comprobamos que con el objeto de la clase DGEList se mantienen las dimensiones de la matriz:
+Pero antes, creamos el objeto `DGEList` a partir de la matriz de conteos y la información de las muestras, es decir, cada uno de los tipos (ELI, NIT, SFI) incluidos en la columna `Group` y comprobamos que con el objeto de la clase `DGEList` se mantienen las dimensiones de la matriz:
 
 ```{r message=FALSE, warning=FALSE, tidy=TRUE}
-
 # Creamos el objeto con la clase DGEList
 dge <- DGEList(counts=counts.subset, group=subset$Group, genes = counts$X1)
 dim(dge)
-
 ```
 
 En este nuevo elemento se han añadido dos columnas, con el tamaño de las muestras, o número de conteos de cada una de ellas y los factores  de normalización cuya función es la de ponderar el tamaño de las muestras. Estos últimos son en realidad la suma de todos los conteos que se han obtenido en cada
@@ -288,7 +284,6 @@ dge$genes$entrez <- mapIds(org.Hs.eg.db,
                      multiVals="first")
 
 head(dge$genes)
-
 ```
 
 Sin embargo, aproximadamente la mitad de los genes se muestran como NA, por lo que entiendo que no se han reconocido como genes o la anotación no es la adecuada. Por ello, al final, no lo he utilizado en la interpretacion de los analisis.
@@ -300,18 +295,14 @@ Generalmente, en las matrices de conteos hay un cierto número de genes que pres
 Para ello, en primer lugar se realizó una transformación de los datos con el fin de tener en una misma escala todas las muestras y evitar, así, diferencias debido al distinto tamaño de las librerías. La transformación que se llevó a cabo fue la conversión de las lecturas a CPM (conteos por millón). En este caso, ya que los grupos son pequeños, no más de diez muestras cada grupo, se mantendrán los genes que logran al menos 0.3 cpm de tres. Vemos la nueva dimensión de nuestra matriz de trabajo:
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
-
-## MODIFICAR
 # Paso de los datos a CPM conteos por millon, con la funcion cpm del paquete edgeR.
 library(edgeR)
-
 select.genes <- rowSums(cpm(dge)>0.3) >= 3
 dge <- dge[select.genes,] # Nuevo objeto de estudio, ya filtrado.
 dim(dge)
-
 ```
 
-Al imponer la condición de cpm(y) > 3, se crea una matriz con valores lógicos donde aparecerá TRUE si la condición se cumple y FALSE si no se cumple. Tras hacer esto, sólo nos quedamos con las filas, es decir, los genes, en los que haya mas de tres coincidencias con TRUE. Los genes seleccionados están en el vector `select.genes`, y con éste se puede eliminar los que no hayan sido seleccionados del objeto que estamos estudiando.
+Al imponer la condición de *cpm(y) > 3*, se crea una matriz con valores lógicos donde aparecerá TRUE si la condición se cumple y FALSE si no se cumple. Tras hacer esto, sólo nos quedamos con las filas, es decir, los genes, en los que haya mas de tres coincidencias con TRUE. Los genes seleccionados están en el vector `select.genes`, y con éste se puede eliminar los que no hayan sido seleccionados del objeto que estamos estudiando.
 
 Se ha disminuido considerablemente el número de genes para analizar, exactamente nos quedan 23111 genes de los 56202 originales, por lo que el análisis y por tanto los resultados y las interpretaciones serán más claras. La matriz de conteos seguirá estando en condiciones para proceder al análisis, sin embargo, el tamaño de las muestras calculadas anteriormente no se ha modificado con este cambio, y se necesita los valores reales. Vemos aqui el tamano de las librerias antes y despues del filtrado:
 
@@ -332,12 +323,12 @@ Durante la preparación de la muestra o el proceso de secuenciación, los factor
 
 Cualquier gráfico que muestre las distribuciones de expresión por muestra, como una densidad o un diagrama de caja, es útil para determinar si alguna muestra es diferente de otras y si es por tanto necesaria la normalización. A continuación, utilizaremos diagramas de cajas para verificar la distribución de los recuentos de lectura en la escala `log2`. Podemos usar la `cpm` función para obtener recuentos de log2 por millón, que se corrigen para los diferentes tamaños de biblioteca. La cpmfunción también agrega un pequeño desplazamiento para evitar tomar el registro de cero:
 
-```{r echo=FALSE}
-# Get log2 counts per million
+```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
+# log2 conteos por millon
 logcounts <- cpm(dge,log=TRUE)
-# Check distributions of samples using boxplots
+# boxplots
 boxplot(logcounts, xlab="", ylab="Log2 counts per million",las=2)
-# Let's add a blue horizontal line that corresponds to the median logCPM
+# Anadimos una linea azul que se corresponde con la media logCPM
 abline(h=median(logcounts),col="blue")
 title("Boxplots de logCPMs (sin normalizar)")
 ```
@@ -357,33 +348,32 @@ Tras hacer la normalización la columna donde aparece los factores de normalizac
 Veamos el diagrama de caja de los datos normalizados:
 
 ```{r echo=FALSE}
-# Get log2 counts per million
+# log2 conteos por millon
 logcounts1 <- cpm(dge.norm,log=TRUE)
-# Check distributions of samples using boxplots
+# boxplots
 boxplot(logcounts1, xlab="", ylab="Log2 counts per million",las=2)
-# Let's add a blue horizontal line that corresponds to the median logCPM
+# Linea azul con la media logCPM
 abline(h=median(logcounts1),col="blue")
 title("Boxplots de logCPMs (normalizados)")
 ```
 
-##### Exploración de los datos (control de calidad)
+#### Exploración de los datos (control de calidad)
 
 El gráfico MDS (Multidimensional scaling plot of distances) muestra la relación entre todas las muestras. El análisis que realiza este gráfico es similar a un PCA, es decir, al análisis de componentes principales. Es una herramienta increíblemente útil para el control de calidad y la comprobación de valores atípicos:
 
-```{r echo=FALSE, message=FALSE, warning=FALSE, ,fig.height=5, tidy=TRUE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.height=5, tidy=TRUE}
 grupo <- as.factor(as.character(subset$Group))
 col.status <- c("blue","red","dark green")[grupo]
 plotMDS(dge.norm$counts, labels = grupo, col=col.status)
 title("Tipos de infiltración")
 legend("bottomright",fill=c("blue","red","dark green"),legend=levels(grupo))
-
 ```
 
 En el gráfico MDS, la distancia entre cada par de muestras se puede interpretar como el cambio de log-fold principal entre las muestras para los genes que mejor distinguen ese par de muestras. Por defecto, el cambio de pliegue inicial se define como la raíz cuadrática media de los 500 cambios de log2 veces más grandes entre ese par de muestras. La figura anterior muestra que las muestras replicadas del mismo grupo no siempre se agrupan juntas  y las muestras de diferentes grupos no están bien separadas. En otras palabras, las diferencias entre los grupos no son mucho mayores que las diferencias dentro de los grupos, lo que significa que **puede que no haya diferencias estadísticamente significativas entre los grupos**. La distancia entre los tipos a la izquierda y la derecha es además muy elevada, lo que implica una importante diferencia entre las muestras. Por otro lado, estas dos muestras situadas a la izquierda del grupo NIT y ELI se encuentran muy separadas del resto, lo que quizá indique anomalías en las muestras, y habría que considerar su eliminación del análisis.
 
 Los perfiles de expresión de muestras individuales se pueden explorar más de cerca con gráficos de diferencia de medias (MD). Un diagrama de MD visualiza size-adjusted log-fold change por tamaño de librería entre dos librerías (la diferencia) frente a la expresión de registro promedio en esas librerías (la media). Veamos diagrama MD que compara la muestra 1 con una librería de referencia artificial construida a partir del promedio de todas las otras muestras:
 
-```{r}
+```{r echo=FALSE}
 plotMD(dge.norm, column=1)
 abline(h=0, col="red", lty=2, lwd=2)
 ```
@@ -392,7 +382,7 @@ La mayor parte de los genes se centran alrededor de la línea de log-fold change
 
 Es una buena práctica hacer gráficos MD para todas las muestras como un control de calidad, siempre que no sean demasiadas. Veamos como se distribuyen nuestras muestras:
 
-```{r echo=FALSE}
+```{r echo=FALSE, fig.height=4.5, message=FALSE, warning=FALSE, tidy=TRUE}
 par(mfrow=c(3,2))
 # Create the loop.vector (all the columns)
 loop.vector <- 1:30
@@ -403,14 +393,13 @@ for (i in loop.vector) { # Loop over loop.vector
   plotMD(dge.norm, column=i)
   abline(h=0, col="red", lty=2, lwd=2)
 }
-
 ```
 
 Por ejemplo, la muestra GTEX-R55G-0726-SM-2TC6J las proporciones logarítmicas muestran un sesgo positivo notable, con una serie de genes muy altamente regulados (por encima de la linea roja), en comparación con otras muestras. Estos genes explican por qué el factor de normalización para esta muestra está muy por debajo de uno. Por el contrario, las proporciones logarítmicas para la muestra 1 estaban algo sesgadas negativamente, lo que corresponde a un factor de normalización superior a uno.
 
 También podemos explorar las relaciones entre las muestras visualizando un heatmap de la matriz de correlación. El resultado de eset grafico corresponde a lo que sabemos sobre el conjunto de datos. Primero, las muestras provienen de individuos diferentes, por lo que los tres grupos son muy diferentes. En segundo lugar, dado que las muestras en cada grupo son réplicas técnicas, la variación dentro del grupo es muy baja.
 
-```{r}
+```{r echo=FALSE, fig.height=5.5, message=FALSE, warning=FALSE, tidy=TRUE}
 heatmap(cor(logcounts1))
 ```
 
@@ -432,7 +421,6 @@ disp.all <- estimateDisp(dge.norm, robust=TRUE)
 # biológico (BCV) y la dispersión común.
  
 disp.estim <- estimateTagwiseDisp(disp)
-
 ```
 
 Tal y como se puede ver en la salida obtenida al estimar la dispersión común, ésta es de 0.239, no muy elevada, y el coeficiente de variación biológica (BCV) de un 49 %. La variación biológica entre las muestras de un mismo grupo es un factor que influye considerablemente en el número de genes DE.
@@ -453,6 +441,9 @@ El modelo NB puede ampliarse con métodos de cuasi-verosimilitud (QL) para tener
 ```{r echo=FALSE}
 fit <- glmQLFit(disp.all, robust=TRUE)
 head(fit$coefficients)
+```
+
+```{r echo=FALSE, fig.height=3.5, message=FALSE, warning=FALSE, tidy=TRUE}
 plotQLDisp(fit)
 summary(fit$df.prior)
 ```
@@ -461,7 +452,7 @@ Obtenemos unas estimaciones de df bajas, lo que indican que las dispersiones son
 
 Una vez calculados los factores de normalización y las estimación de las dispersiones, vamos a realizar las pruebas para determinar la expresión diferencial y buscar diferencias entre los tres grupos. La función que realiza estas pruebas es `exactTest()`:
 
-##### Análisis de expresión diferencial
+#### Análisis de expresión diferencial
 **Comparación entre los grupos ELI y NIT**
 
 Vamos a realizar para ello pruebas de razón de probabilidad para nuestros tejidos y observar las diferencias del grupo ELI *vs* NIT. La función `exactTest()` lleva a cabo pruebas usando la binomial negativa exacta. 
@@ -469,10 +460,9 @@ Vamos a realizar para ello pruebas de razón de probabilidad para nuestros tejid
 La función `topTags()` muestra convenientemente los resultados de las pruebas para las n etiquetas más significativas, es decir, los transcritos más diferencialmente expresados y las razones de falsos descubrimientos (FDRs). Ordenamos la tabla según la columna `PValue`.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
-et <- exactTest(disp.estim, pair = c("NIT", "ELI"))
+et <- exactTest(disp.estim, pair = c("ELI","NIT"))
 top <- topTags(et, n=23111)
 head(top)[,-1]
-
 ```
 
 La columna `logFC` proporciona la diferencia log-fold change para los recuentos entre los dos grupos. Al estar ordenados según la columna *P-Value*, los primeros elementos serán los que menor p-valor tengan, que coincide, lógicamente, con los menores FDRs, y se ve que existen genes que tienen estos dos datos muy bajos, lo que indica que es más probable que estos genes sean biológicamente significativos.
@@ -481,18 +471,19 @@ La siguiente tabla muestra los recuentos sin procesar de los genes que edgeR ha 
 
 ```{r echo=FALSE}
 detags.com <- rownames(topTags(et)$table)
-disp$counts[detags.com, ]
+print(disp$counts[detags.com, 1:4])
 ```
 
 Solamente se han muestrado diez genes de los 23111 genes estudiados, en general, será más fácil observar la proporción de DGEs através de gráficos.
 
-```{r warning=FALSE,message=FALSE,tidy=TRUE,fig.height=4.5}
+```{r}
 table(top$table$FDR <0.5)
 table(top$table$FDR <0.05)/nrow(top$table)
+```
 
-hist(top$table$FDR, breaks=100, main="Histograma de FDR (ELI vs NIT")
+```{r echo=FALSE, fig.height=3.5, message=FALSE, warning=FALSE, tidy=TRUE}
+hist(top$table$FDR, breaks=100, main="Histograma FDR (ELI vs. NIT)", xlab="FDR")
 abline(v=0.05, col="red", lwd=3)
-
 ```
 
 Se ha establecido el corte en α = 0.05 para identificar los genes que están diferencialmente expresados. Un 75.4 % de los genes no se pueden considerar que tengan expresiones distintas en los diferentes grupos, además en el histograma se ve que la mayoría de los datos los encontramos tras el α = 0.05.
@@ -504,22 +495,21 @@ de <- decideTestsDGE(et)
 summary(de)
 ```
 
-El número total de genes con un valor de FDR inferior al nivel de significación (α = 0,05) fue de 17422. De estos genes, 3590 se identificaron como infrarregulados y 2099 como sobrerregulados.
+El número total de genes con un valor de FDR inferior al nivel de significación (α = 0,05) fue de 17422. De estos genes, 3590 se identificaron como sobrerregulados y 2099 como infrarregulados.
 
 Para visualizar gráficamente los genes identificados como DE respecto a la totalidad, se emplea el gráfico obtenido con la función `plotSmear` que muestra los cambios log-fold-tagwise contra log-cpm (análogo a un gráfico MA para datos de microarrays). Los genes diferencialmente expresados se muestran resaltados en rojo:
 
 ```{r echo=FALSE, fig.height=4.5, message=FALSE, warning=FALSE, tidy=TRUE}
 detags <- rownames(dge)[as.logical(de)]
-plotSmear(et, de.tags=detags, main="plotSmear entre los grupos NIT y ELI")
+plotSmear(et, de.tags=detags, main="plotSmear NIT vs. ELI")
 abline(h=c(-1,1), col="blue")
-
 ```
 
 **Comparación entre los grupos SFI y NIT**
 
 Realizamos los mismos pasos anteriores, pero comparando en este caso los grupos NIT y SFI, indicación que incluimos dentro de la función `exactTest` con el comando `pair`.
 
-```{r warning=FALSE,message=FALSE,tidy=TRUE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
 et.1 <- exactTest(disp.estim, pair = c("NIT", "SFI"))
 top.1 <- topTags(et.1, n=23111)
 head(top.1)[,-1]
@@ -529,13 +519,14 @@ En este caso, los genes tienen los P-value bajos, pero no demasiado, lo que indi
 
 Veamos el análisis de la proporción de DGEs através de gráficos.
 
-```{r warning=FALSE,message=FALSE,tidy=TRUE,fig.height=4.5}
+```{r}
 table(top.1$table$FDR <0.5)
 table(top.1$table$FDR <0.05)/nrow(top.1$table)
+```
 
-hist(top.1$table$FDR, breaks=100, main="Histograma de FDR (SFI vs NIT)")
+```{r echo=FALSE, fig.height=3.5, message=FALSE, warning=FALSE, tidy=TRUE}
+hist(top.1$table$FDR, breaks=100, main="Histograma FDR (SFI vs. NIT)", xlab="FDR")
 abline(v=0.05, col="red", lwd=3)
-
 ```
 
 Se ha establecido de nuevo el corte en α = 0.05 para identificar los genes que están diferencialmente expresados. Un 98.8% de los genes no se pueden considerar que tengan expresiones distintas en los diferentes grupos, además en el histograma se ve que la mayoría de los datos los encontramos tras el α = 0.05.
@@ -553,16 +544,15 @@ Veamos ahora el grafico `plotSmear` que muestra los cambios log-fold-tagwise con
 
 ```{r echo=FALSE, fig.height=4.5, message=FALSE, warning=FALSE, tidy=TRUE}
 detags.1 <- rownames(dge)[as.logical(de.1)]
-plotSmear(et.1, de.tags=detags.1, main="plotSmear entre los grupos SFI y NIT")
+plotSmear(et.1, de.tags=detags.1, main="plotSmear SFI vs. NIT")
 abline(h=c(-1,1), col="blue")
-
 ```
 
 **Comparación entre los grupos SFI y ELI**
 
 Realizamos los mismos pasos anteriores, pero comparando en este caso los grupos ELI y SFI, indicación que incluimos dentro de la función `exactTest` con el comando `pair`.
 
-```{r warning=FALSE,message=FALSE,tidy=TRUE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
 et.2 <- exactTest(disp.estim, pair = c("ELI", "SFI"))
 top.2 <- topTags(et.2, n=23111)
 head(top.2)[,-1]
@@ -572,13 +562,14 @@ En este caso, los genes tienen los P-value bajos, pero no demasiado, lo que indi
 
 Veamos el análisis de la proporción de DGEs através de gráficos.
 
-```{r warning=FALSE,message=FALSE,tidy=TRUE,fig.height=4.5}
+```{r }
 table(top.2$table$FDR <0.5)
 table(top.2$table$FDR <0.05)/nrow(top.2$table)
+```
 
-hist(top.2$table$FDR, breaks=100, main="Histograma de FDR (SFI vs ELI)")
+```{r echo=FALSE, fig.height=3.5, message=FALSE, warning=FALSE, tidy=TRUE}
+hist(top.2$table$FDR, breaks=100, main="Histograma FDR (SFI vs. ELI)", xlab="FDR")
 abline(v=0.05, col="red", lwd=3)
-
 ```
 
 Se ha establecido de nuevo el corte en α = 0.05 para identificar los genes que están diferencialmente expresados. Un 75.8% de los genes no se pueden considerar que tengan expresiones distintas en los diferentes grupos, además en el histograma se ve que la mayoría de los datos los encontramos tras el α = 0.05.
@@ -596,12 +587,11 @@ Veamos ahora el grafico `plotSmear` que muestra los cambios log-fold-tagwise con
 
 ```{r echo=FALSE, fig.height=4.5, message=FALSE, warning=FALSE, tidy=TRUE}
 detags.2 <- rownames(dge)[as.logical(de.2)]
-plotSmear(et.2, de.tags=detags.2, main="plotSmear entre los grupos SFI y ELI")
+plotSmear(et.2, de.tags=detags.2, main="plotSmear SFI vs. ELI")
 abline(h=c(-1,1), col="blue")
-
 ```
 
-#### Análisis con DESeq2
+### Análisis con DESeq2
 
 Empleamos ahora el paquete `DESeq2`. El modelo probabilístico que utiliza este paquete es, al igual que EdgeR, la Binomial Negativa. Sin embargo, cada uno emplea su propia estrategia de normalización.
 
@@ -628,7 +618,7 @@ dds.1 <- DESeq(dds) # Run the DESeq pipeline
 dds.1
 ```
 
-Podemos representar esta función con el siguiente grafico, que indica la media de los conteos normalizados de cada gen frente a su dispersión por gen y a la dispersión común o curva ajustada a
+Podemos representar esta función con el siguiente gráfico, que indica la media de los conteos normalizados de cada gen frente a su dispersión por gen y a la dispersión común o curva ajustada a
 la dispersión de cada gen, estando la primera representada con puntos negros y la segunda con la línea roja.
 
 Este gráfico puede ser un diagnóstico útil. Algunas estimaciones genéticas se marcan como valores atípicos y no se reducen hacia el valor ajustado (fitted). Si se observa el eje Y, vemos que cuando aumentan los conteos normalizados disminuye la dispersión. Los puntos por debajo de la línea roja pueden deberse al bajo número de réplicas de las muestras o individuos estudiados, por eso, la funcion `DESeq`, que toma un enfoque conservador y le asigna a los genes que quedan por debajo de la curva el valor ajustado y le asigna a cada gen la dispersión máxima
@@ -640,13 +630,13 @@ posible.
 plotDispEsts(dds.1, main="Dispersion plot")
 ```
 
-##### Transformación de los datos para su visualización
+#### Transformación de los datos para su visualización
 
 Aunque en el paquete DESeq2 se opera con conteos, utilizando distribuciones discretas, para la realización de otros análisis como pueden ser la visualización o elagrupamiento, es útil trabajar con versiones transformadas de los datos de conteo. Debido a esto, se ha realizado una transformación logarítmica regularizada (rlog) y la hemos comparado con la transformacivsdatan que nos da la función `vst` (mucho más rápida) que emplea una transformación estabilizadora de varianza.
 
 Para los genes con recuentos altos, el rlog dará un resultado similar a la transformación log2 ordinaria de los recuentos normalizados. Para los genes con recuentos más bajos, los valores se reducen a los promedios de los genes en todas las muestras. Los datos transformados por rlog se vuelven aproximadamente homoscedásticos. Podemos ver estos datos transformados en los siguiente histogramas:
 
-```{r echo=FALSE, fig.height=4.5, message=FALSE, warning=FALSE, tidy=TRUE}
+```{r echo=FALSE, fig.height=3.5, fig.width=6, message=FALSE, warning=FALSE, tidy=TRUE}
 # Regularized log transformation for clustering/heatmaps, etc
 rld <- rlogTransformation(dds.1)
 par(mfrow=c(1,2))
@@ -656,11 +646,11 @@ vsdata <- vst(dds.1, blind=FALSE)
 hist(assay(vsdata), main = "Hist transf con vst")
 ```
 
-##### Análisis de agrupamientos
+#### Análisis de agrupamientos
 
 Una vez que los datos han sido transformados, se puede ver el efecto de esta transformación mediante un gráfico de dispersion, y así comparar entre los datos obtenidos mediante el log2, rlog y vst. Por ejemplo, seleccionando las primera muestras, se ha podido observar que la distribución cambia sobre todo en la parte inferior izquierda del gráfico, correspondiente a los datos de reads con menor conteo, por lo que en el rlog se ven más comprimidos, que en los otros dos casos.
 
-```{r echo=FALSE, fig.height=4.5, message=FALSE, warning=FALSE, tidy=TRUE}
+```{r echo=FALSE, fig.height=3.5, fig.width=5, message=FALSE, warning=FALSE, tidy=TRUE}
 par(mfrow=c(1,3))
 plot(assay(rld))
 plot(assay(dds.1))
@@ -671,7 +661,7 @@ De forma complementaria al estudio de los datos, se ha podido realizar un análi
 
 Para ello realizamos el siguiente *heatmap* donde se pueden observar los genes diferencialmente expresados, y así conseguir una información muy visual que puede ayudar a extraer el sentido biológico junto a los datos que obtendremos posteriormente. De este modo, se puede observar qué genes están más sobreexpresados en las diferentes condiciones, agrupadas de manera jerárquica en el dendograma.
 
-```{r echo=FALSE, fig.height=6.5, message=FALSE, warning=FALSE, tidy=TRUE}
+```{r echo=FALSE, fig.height=6.5, fig.width=7, message=FALSE, warning=FALSE, tidy=TRUE}
 # Definimos los colores para el grafico empleando RColorBrewer
 library(RColorBrewer)
 mycols <- brewer.pal(8, "Dark2")[1:length(unique(condition))]
@@ -688,26 +678,24 @@ heatmap.2(as.matrix(sampleDists), key=F, trace="none",col=colorpanel(100, "black
 
 Para explorar una matriz de conteo, podemos además representarla como un mapa de colores, donde se visualicen claramente los tres grupos estudiados:
 
-```{r warning=FALSE,message=FALSE,tidy=TRUE,fig.height=7}
-
+```{r echo=FALSE, fig.height=5.5, fig.width=8, message=FALSE, warning=FALSE, tidy=TRUE}
 library("pheatmap")
 select <- order(rowMeans(counts(dds.1,normalized=TRUE)),
                 decreasing=TRUE)[1:20]
 df <- as.data.frame(colData(dds.1)[,c("condition", "sizeFactor")])
 pheatmap(assay(rld)[select,], cluster_rows=FALSE, show_rownames=FALSE,
          cluster_cols=FALSE, annotation_col=df)
-
 ```
 
-##### Análisis de componentes principales
+#### Análisis de componentes principales
 
 De forma complementaria al análisis de agrupamientos, se ha analizado también la similitud entre muestras mediante el análisis de componentes principales (PCA),con la función `plotPCA`. En esta gráfica, las muestras se proyectan de manera que se extienden en dos direcciones que explican la mayoría de las diferencias entre ellas. El eje x es la dirección que más separa los puntos de datos, el eje y es una dirección ortogonal a la primera, que es la segunda que más separa los datos. El porcentaje de la varianza total que está contenida en la dirección se puede ver en la etiqueta del eje.
 
-```{r echo=FALSE, fig.height=5.5, message=FALSE, warning=FALSE, tidy=TRUE}
-x <- c(1,2)
-m <- matrix(x, ncol = 2)
-layout(m)
+```{r echo=FALSE, fig.height=4, message=FALSE, warning=FALSE, tidy=TRUE}
 DESeq2::plotPCA(rld, intgroup="condition")
+```
+
+```{r echo=FALSE, fig.height=4, message=FALSE, warning=FALSE, tidy=TRUE}
 # la función vst realizará una transformación estabilizadora de varianza
 plotPCA(vsdata, intgroup="condition") #usamos DESEQ2 plotPCA fxn
 ```
@@ -716,10 +704,7 @@ Los resultados de ambas transformaciones son practicamente iguales. Vemos que ha
 
 Podemos detectar cuáles son las muestras que se encuentran  estrañamente distribuidas si incluimos los nombres de las muestras en el gráfico:
 
-```{r echo=FALSE, fig.height=3.5, message=FALSE, warning=FALSE, tidy=TRUE}
-x <- c(1,1)
-m <- matrix(x, ncol = 2)
-layout(m)
+```{r echo=FALSE, fig.height=4, message=FALSE, warning=FALSE, tidy=TRUE}
 rld_pca <- function (rld, intgroup = "condition", ntop = 500, colors=NULL, 
                      legendpos="bottomleft", main="PCA Biplot", textcx=0.55, ...) {
   require(genefilter)
@@ -752,25 +737,27 @@ rld_pca <- function (rld, intgroup = "condition", ntop = 500, colors=NULL,
 }
 #png("qc-pca.png", 1000, 1000, pointsize=20)
 rld_pca(rld, colors=mycols, intgroup="condition", xlim=c(-75, 35))
-
 ```
 
-##### Análisis de expresión diferencial
+#### Análisis de expresión diferencial
 
 Para identificar los genes más diferencialmente expresados(genes DE), echamos un vistazo a la tabla de resultados. Como la variable *dds* contiene diferentes comparaciones, es necesario extraer la comparación de interés para proceder con las comparaciones entre los tres grupos, pero antes veamos los resultados generales, ordenados segun el p-value:
 
-```{r echo=FALSE, fig.height=3.5, message=FALSE, warning=FALSE, tidy=TRUE}
+```{r echo=FALSE, fig.height=3, message=FALSE, warning=FALSE, tidy=TRUE}
 res <- results(dds.1)
 ## Merge with normalized count data
 resdata <- merge(as.data.frame(res), as.data.frame(counts(dds.1, normalized=TRUE)), 
                  by="row.names", sort=FALSE)
 ## Write results
-#write.csv(resdata, file="diffexpr-results.csv")
+# write.csv(resdata, file="diffexpr-results.csv")
 
 names(resdata)[1] <- "Gene"
 res.ord <- resdata[order(resdata$padj),]
-head(res.ord)[,1:6] #tabla de resultados
+# tabla de resultados
+head(res.ord)[,1:6]
+```
 
+```{r echo=FALSE, fig.height=3.5, message=FALSE, warning=FALSE, tidy=TRUE}
 ## Examine plot of p-values
 hist(res.ord$pvalue, breaks=50, col="grey", xlab="p value", main = "Histograma de
      genes diferencialmente expresados según p-value")
@@ -782,7 +769,7 @@ Para conocer el número de genes que se expresaban diferencialmente entre los gr
 summary(res, alpha = 0.05) #resumen de resultados
 ```
 
-La salida de esta función proporcionó el número de genes que presentaban un valor de logFC significativamente negativo (3262 genes) o significativamente positivo (2556 genes) a un nivel de significación de 0,05, con solo un valor outlier.
+La salida de esta función proporcionó el número de genes que presentaban un valor de logFC significativamente negativo (4110 genes) o significativamente positivo (2848 genes) a un nivel de significación de 0,05, con solo un valor outlier.
 
 **plotCounts**
 
@@ -829,7 +816,6 @@ res$entrez <- mapIds(org.Hs.eg.db,
 
 resOrdered <- res[order(res$pvalue),]
 head(resOrdered)
-
 ```
 
 He realizado el mapeado para que se muestren los entrezid y símbolos de cada gen ordenados por su p-valor, pero me he dado cuenta de que aproximadamente la mitad de los genes se muestran como NA, por lo que entiendo que no se han reconocido como genes. Por ello, no lo he utilizado en la interpretacion de los analisis.
@@ -840,7 +826,7 @@ Una forma de visualizar los resultados de una comparación para todos los genes 
 
 Veamos un gráfico *volcano* con los datos de nuestra matriz de resultados `res` y añadimos los colores: azul si padj < 0.01, rojo si log2FC > 1 y padj < 0.05:
 
-```{r echo=FALSE, fig.height=5, message=FALSE, warning=FALSE, tidy=TRUE}
+```{r echo=FALSE, fig.height=4.5, message=FALSE, warning=FALSE, tidy=TRUE}
 #reset par
 par(mfrow=c(1,1))
 # realizamos un basico volcano plot
@@ -855,7 +841,7 @@ with(subset(res, padj<.01 & abs(log2FoldChange)>2), points(log2FoldChange, -log1
 
 Los resultados del análisis de expresión diferencial bajo DESeq2 se visualizan mediante gráficos MA-Plot. Este tipo de gráficos se genera al representar la media de lecturas normalizadas de cada gen frente al logaritmo en base 2 del fold-change.
 
-```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE, fig.height=5}
 ## MA plot with "significant" genes labeled
 
 maplot <- function (res, thresh=0.05, labelsig=TRUE, textcx=0.6, ...) {
@@ -869,21 +855,19 @@ maplot <- function (res, thresh=0.05, labelsig=TRUE, textcx=0.6, ...) {
 }
 #png("diffexpr-maplot.png", 1500, 1000, pointsize=20)
 maplot(resdata, main="MA Plot")
-
 ```
 
 Como se ha indicado anteriormente, para comparar los tres grupos por parejas, se ha utilizado la función `results`, a la que se le ha añadido un contraste (por ejemplo, contrast = c("condition", "ELI", "SIF")) para seleccionar las muestras que queremos comparar. Así, se realizaron tres comparativas: ELI *vs* SFI, SFI *vs* NIT y NIT *vs* ELI.
 
 Mediante esta función, se calcula el `log2FoldChange`, que es la estimación del efecto. Indica cuánto cambia la expresión del gen de una muestra respecto a la otra. Además, se realiza para cada gen una prueba de hipótesis para ver si existe una variabilidad experimental, con el p-valor. Posterior a la visualización de los resultados, se han ajustado los datos al estudio, estableciendo un ajuste del p-valor (padj) menor a 0.05. Este p-valor se obtiene mediante el método de Benjamini-Hochberg, indicando el false discovery rate (FDR).
 
-**ELI *vs* SFI**
+**ELI *vs* NIT**
 
-Vemos la tabla de resultados con aquellos genes que tienen un menor p-value y por tanto, pueden que esten diferencialmente expresados.
-Como hemos visto esta tabla proporciona los valores básicos a través de muestras, log2 fold changes, errores estándar, test estadísticos, valores p y valores p ajustados:
+Veamos el resumen y la tabla de los resultados para comparar ambos grupos:
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
 
-res1 <- results(dds.1, contrast=c("condition","ELI","SFI"), alpha = 0.05)
+res1 <- results(dds.1, contrast=c("condition","ELI","NIT"), alpha = 0.05)
 summary(res1)
 
 res.ord1 <- res1[order(res1$padj),]
@@ -895,13 +879,13 @@ summary(resadj1)
 sum(res1$padj <= 0.05, na.rm=TRUE)
 ```
 
-Los resultados de la comparativa entre los datos de RNA-seq de la condición “ELI” y “SFI”, con un p-valor ajustado de 0.05 (padj), mostraron un total de 17675 genes diferencialmente expresados, frente a los 46109 genes del estudio (res1). Es estos 17675, 3258 estaban sobreexpresados (un 38% de los genes y un 7.1% para los genes totales), con solo un valor outliers, 5835 genes con un p-ajustado menor a 0.05.
+Los resultados de la comparativa entre los datos de RNA-seq de la condición “ELI” y “NIT”, con un p-valor ajustado de 0.05 (padj), mostraron un total de 7248 genes diferencialmente expresados, frente a los 46109 genes del estudio (res1). Es estos 7248, 4600 estaban sobreexpresados (un 63% de los genes y un 10% de los genes totales), con un valor outlier.
 
-Podemos ver de forma gráfica estos resultados con un *Volcano plot* que permite representar en el mismo gráfico aquellos genes que están por encima y por debajo de los umbrales de fold change (2 y - 2) y de FDR (0.05) que hemos indicado anteriormente. En el eje de abcisas se reprensentan las diferencias de expresión de los genes mediante el LFC, mientras que en el de ordenadas se encuentra el –log del p-valor.
+Veamos el volcano plot correspondiente:
 
-```{r echo=FALSE, fig.height=5, message=FALSE, warning=FALSE, tidy=TRUE}
+```{r echo=FALSE, fig.height=4.5, message=FALSE, warning=FALSE, tidy=TRUE}
 # realizamos un basico volcano plot
-with(res1, plot(log2FoldChange, -log10(pvalue), pch=20, main="Volcano plot", xlim=c(-3,3)))
+with(res1, plot(log2FoldChange, -log10(pvalue), pch=20, main="Volcano plot ELI vs. NIT", xlim=c(-3,3)))
 
 # anadimos los colores: azul si padj<0.01, rojo if log2FC>1 y padj<0.05)
 with(subset(res1, padj<.01 ), points(log2FoldChange, -log10(pvalue), pch=20, col="blue"))
@@ -910,9 +894,9 @@ with(subset(res1, padj<.01 & abs(log2FoldChange)>2), points(log2FoldChange, -log
 
 *Obtención de los genes up y down regulados*
 
-Se han seleccionado aquellos genes que presentaban un valor de LFC mayor y menor a la unidad.
+Igual que en el caso anterior, se han seleccionado aquellos genes que presentaban un valor de LFC mayor y menor a la unidad.
 
-```{r echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
 genes_up1<-as.data.frame(subset(res1, log2FoldChange >= 1))
 dim(genes_up1)
 
@@ -920,15 +904,15 @@ genes_down1<-as.data.frame(subset(res1, log2FoldChange <= -1))
 dim(genes_down1)
 ```
 
-Como resultado, se han obtenido un total de 6247 genes upregulados y 2072 downregulados en la primera comparación (ELI y SFI).
+Como resultado, se han obtenido un total de 7775 genes upregulados y 2143 downregulados en la segunda comparación (ELI y NIT).
 
-**ELI *vs* NIT**
+**SFI *vs* NIT**
 
-Veamos el resumen y la tabla de los resultados para comparar ambos grupos:
+Creamos el objeto `res` para comparar ambos grupos y vemos el resumen y la tabla de los resultados:
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
 
-res2 <- results(dds.1, contrast=c("condition","ELI","NIT"), alpha = 0.05)
+res2 <- results(dds.1, contrast=c("condition","SFI","NIT"), alpha = 0.05)
 summary(res2)
 
 res.ord2 <- res2[order(res2$padj),]
@@ -940,13 +924,13 @@ summary(resadj2)
 sum(res2$padj <= 0.05, na.rm=TRUE)
 ```
 
-Los resultados de la comparativa entre los datos de RNA-seq de la condición “ELI” y “NIT”, con un p-valor ajustado de 0.05 (padj), mostraron un total de 15908 genes diferencialmente expresados, frente a los 46109 genes del estudio (res2). Es estos 15908, 3201 estaban sobreexpresados (un 35% de los genes y un 6.9% de los genes totales), con un valor outlier.
+Los resultados de la comparativa entre los datos de RNA-seq de la condición “NIT” y “SFI”, con un p-valor ajustado de 0.05 (padj), mostraron un total de 304 genes diferencialmente expresados, frente a los 46221 genes del estudio (res2). Es estos 304, 281 estaban sobreexpresados (un 92% para los diferencialmente expresados, un 0.61% de los genes totales), con un valor outlier.
 
-Veamos el volcano plot correspondiente:
+El gráfico *volcano plot* correspondiente:
 
-```{r echo=FALSE, fig.height=5.5, message=FALSE, warning=FALSE, tidy=TRUE}
+```{r echo=FALSE, fig.height=4.5, message=FALSE, warning=FALSE, tidy=TRUE}
 # realizamos un basico volcano plot
-with(res2, plot(log2FoldChange, -log10(pvalue), pch=20, main="Volcano plot", xlim=c(-3,3)))
+with(res2, plot(log2FoldChange, -log10(pvalue), pch=20, main="Volcano plot SFI vs. NIT", xlim=c(-3,3)))
 
 # anadimos los colores: azul si padj<0.01, rojo if log2FC>1 y padj<0.05)
 with(subset(res2, padj<.01 ), points(log2FoldChange, -log10(pvalue), pch=20, col="blue"))
@@ -955,7 +939,7 @@ with(subset(res2, padj<.01 & abs(log2FoldChange)>2), points(log2FoldChange, -log
 
 *Obtención de los genes up y down regulados*
 
-Igual que en el caso anterior, se han seleccionado aquellos genes que presentaban un valor de LFC mayor y menor a la unidad.
+Genes que presentaban un valor de LFC mayor y menor a la unidad:
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
 genes_up2<-as.data.frame(subset(res2, log2FoldChange >= 1))
@@ -965,15 +949,16 @@ genes_down2<-as.data.frame(subset(res2, log2FoldChange <= -1))
 dim(genes_down2)
 ```
 
-Como resultado, se han obtenido un total de 6239 genes upregulados y 2182 downregulados en la segunda comparación (ELI y NIT)
+Como resultado, se han obtenido un total de 3921 genes upregulados y 1992 downregulados en la tercera comparación (SFI y NIT).
 
-**NIT *vs* SFI**
+**SFI *vs* ELI**
 
-Creamos el objeto `res` para comparar ambos grupos y vemos el resumen y la tabla de los resultados:
+Vemos la tabla de resultados con aquellos genes que tienen un menor p-value y por tanto, pueden que esten diferencialmente expresados.
+Como hemos visto esta tabla proporciona los valores básicos a través de muestras, log2 fold changes, errores estándar, test estadísticos, valores p y valores p ajustados:
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
 
-res3 <- results(dds.1, contrast=c("condition","NIT","SFI"), alpha = 0.05)
+res3 <- results(dds.1, contrast=c("condition","SFI","ELI"), alpha = 0.05)
 summary(res3)
 
 res.ord3 <- res3[order(res3$padj),]
@@ -985,13 +970,13 @@ summary(resadj3)
 sum(res3$padj <= 0.05, na.rm=TRUE)
 ```
 
-Los resultados de la comparativa entre los datos de RNA-seq de la condición “NIT” y “SFI”, con un p-valor ajustado de 0.05 (padj), mostraron un total de 20326 genes diferencialmente expresados, frente a los 46109 genes del estudio (res3). Es estos 20326, 29 estaban sobreexpresados (un 44% para los diferencialmente expresados, un 0.063% de los genes totales), con un valor outlier.
+Los resultados de la comparativa entre los datos de RNA-seq de la condición “ELI” y “SFI”, con un p-valor ajustado de 0.05 (padj), mostraron un total de 7000 genes diferencialmente expresados, frente a los 46221 genes del estudio (res3). En estos 7000, 2883 estaban sobreexpresados (un 41% de los genes y un 6.2% para los genes totales), con solo un valor outliers.
 
-El gráfico *volcano plot* correspondiente:
+Podemos ver de forma gráfica estos resultados con un *Volcano plot* que permite representar en el mismo gráfico aquellos genes que están por encima y por debajo de los umbrales de fold change (2 y - 2) y de FDR (0.05) que hemos indicado anteriormente. En el eje de abcisas se reprensentan las diferencias de expresión de los genes mediante el LFC, mientras que en el de ordenadas se encuentra el –log del p-valor.
 
-```{r echo=FALSE, fig.height=5.5, message=FALSE, warning=FALSE, tidy=TRUE}
+```{r echo=FALSE, fig.height=4.5, message=FALSE, warning=FALSE, tidy=TRUE}
 # realizamos un basico volcano plot
-with(res3, plot(log2FoldChange, -log10(pvalue), pch=20, main="Volcano plot", xlim=c(-3,3)))
+with(res3, plot(log2FoldChange, -log10(pvalue), pch=20, main="Volcano plot SFI vs. ELI", xlim=c(-3,3)))
 
 # anadimos los colores: azul si padj<0.01, rojo if log2FC>1 y padj<0.05)
 with(subset(res3, padj<.01 ), points(log2FoldChange, -log10(pvalue), pch=20, col="blue"))
@@ -1000,9 +985,9 @@ with(subset(res3, padj<.01 & abs(log2FoldChange)>2), points(log2FoldChange, -log
 
 *Obtención de los genes up y down regulados*
 
-Genes que presentaban un valor de LFC mayor y menor a la unidad:
+Se han seleccionado aquellos genes que presentaban un valor de LFC mayor y menor a la unidad.
 
-```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
+```{r echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
 genes_up3<-as.data.frame(subset(res3, log2FoldChange >= 1))
 dim(genes_up3)
 
@@ -1010,23 +995,21 @@ genes_down3<-as.data.frame(subset(res3, log2FoldChange <= -1))
 dim(genes_down3)
 ```
 
-Como resultado, se han obtenido un total de 2337 genes upregulados y 2820 downregulados en la tercera comparación (NIT y SFI)
+Como resultado, se han obtenido un total de 2639 genes upregulados y 6922 downregulados en la primera comparación (SFI y ELI).
 
-##### Gráfico de diferencia de medias
+#### Gráfico de diferencia de medias
 
 Una gráfica de diferencia de medias (MA-PLOT) permite visualizar la distribución de los coeficientes estimados en el modelo, como pueden ser las comparaciones entre genes. En el eje y se sitúa el valor del LFC, mientras que en el eje x se sitúan las medias de los counts normalizados. En DESeq2, la función plotMA muestra los cambios de pliegue log2 atribuibles a una variable dada sobre la media de los recuentos normalizados para todas las muestras en el DESeqDataSet . Los puntos serán de color rojo si el valor p ajustado es menor que 0.1. Los puntos que se caen de la ventana se trazan como triángulos abiertos que apuntan hacia arriba o hacia abajo.
 
 Así si hubiese genes diferencialmente expresados se mostrarian en color rojo junto con el resto de genes analizados en cada una de las comparaciones (res1, res2 y res3).
 
-```{r warning=FALSE,message=FALSE,tidy=TRUE,fig.height=6.5}
-
-DESeq2::plotMA(res1, main="MA-plot DESeq2", ylim=c(-2,2))
+```{r echo=FALSE, fig.height=4, message=FALSE, warning=FALSE, tidy=TRUE}
+DESeq2::plotMA(res1, main="MA-plot DESeq2 ELI vs. NIT", ylim=c(-2,2))
 abline(h=c(-1,1), col="dodgerblue", lwd=2)
-DESeq2::plotMA(res2, main="MA-plot DESeq2", ylim=c(-2,2))
+DESeq2::plotMA(res2, main="MA-plot DESeq2 SFI vs. NIT", ylim=c(-2,2))
 abline(h=c(-1,1), col="dodgerblue", lwd=2)
-DESeq2::plotMA(res3, main="MA-plot DESeq2", ylim=c(-2,2))
+DESeq2::plotMA(res3, main="MA-plot DESeq2 SFI vs. ELI", ylim=c(-2,2))
 abline(h=c(-1,1), col="dodgerblue", lwd=2)
-
 ```
 
 # Resultados. Adaptar a mis datos
@@ -1050,13 +1033,11 @@ Decidir entre quitar o no los valores bajos o nulos
 Para facilitar la reproducibilidad del informe, se han incluido varios parámetros en el encabezado `YAML` del documento cuyos valores se pueden establecer cuando se procesa el informe. Se ha incluido tanto la carpeta donde se ecuentran los datos como los nombres de los archivos y la ruta de acceso, de esta forma podemos leer los datos con el siguiente código:
 
 
-```{r eval=FALSE, include=TRUE}
-
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=TRUE}
 library(readr)
 library(knitr)
 
 ### Lectura de los datos de contajes
-
 counts <- read_delim(file=file.path(params$folder.data,params$file1),";",
                       col_names = TRUE)
 
@@ -1065,7 +1046,9 @@ counts[] <- lapply(counts, function(x) {
 }) 
 sapply(counts, class) 
 
-# El nombre de las filas pertenece a las claves de tipo "ENSEMBL", conteniendo un punto y la versión de éste. Eliminamos la version y el punto para que posteriormente podamos emplear la AnnotationDBI para mapear mediante DESeq, si es necesrio
+# El nombre de las filas pertenece a las claves de tipo "ENSEMBL", conteniendo un punto y la 
+# versión de éste. Eliminamos la version y el punto para que posteriormente podamos emplear 
+# la AnnotationDBI para mapear mediante DESeq, si es necesario.
 
 library(stringr)
 
@@ -1081,7 +1064,6 @@ colnames(conteos) <- colnames(counts[,-1])
 length(complete.cases(conteos)) # comprobamos que el dataset está completo
 
 ### Lectura de los datos de las muestras "targets"
-
 targets <- read_delim(file=file.path(params$folder.data,params$file2),",",
                       col_names = TRUE)
 length(complete.cases(targets))
@@ -1096,31 +1078,26 @@ n <- 10
 library(dplyr)
 
 #Grupo NIT
-
 muestra_nit <- targets %>%
   filter(Group=="NIT" & molecular_data_type == "RNA Seq (NGS)") %>%
   sample_n(size=n,replace=FALSE)
 
 #Grupo ELI
-
 muestra_eli <- targets %>%
   filter(Group=="ELI") %>%
   sample_n(size=n,replace=FALSE)
 
 #Grupo SFI
-
 muestra_sfi <- targets %>%
   filter(Group=="SFI" & molecular_data_type == "RNA Seq (NGS)") %>%
   sample_n(size=n,replace=FALSE)
 
 #Unir los grupos en un data frame
-
 subset <- rbind(muestra_nit,muestra_eli, muestra_sfi)
 head(subset)[,1:5]
 #write.table(subset, "./datos/subset.csv") #Guardamos la tabla en nuestra ruta de trabajo
 
 ### Crear la matriz count con las dimensiones del subset
-
 library(dplyr)
 conteos.data.frame <- as.data.frame(conteos)
 counts.subset<- dplyr::select(conteos.data.frame, contains(subset$Sample_Name))
@@ -1180,8 +1157,8 @@ dge$samples$lib.size # Nuevo tamaño de la librería
 
 **Normalización**
 
-```{r eval=FALSE, include=TRUE}
-#  log2 conteos por millon
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=TRUE}
+# log2 conteos por millon
 logcounts <- cpm(dge,log=TRUE)
 # Comprobar la distribución de las muestras empleando boxplots
 boxplot(logcounts, xlab="", ylab="Log2 counts per million",las=2)
@@ -1219,7 +1196,7 @@ abline(h=0, col="red", lty=2, lwd=2)
 
 Es una buena práctica hacer gráficos MD para todas las muestras como un control de calidad, siempre que no sean demasiadas. Veamos como se distribuyen nuestras muestras:
 
-```{r eval=FALSE, include=TRUE}
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=TRUE}
 ## loop creado para hacer gráficos MD para todas las muestras como 
 ## un control de calidad.
 
@@ -1229,13 +1206,12 @@ loop.vector <- 1:30
 
 for (i in loop.vector) { # Loop sobre loop.vector
 
-    # Plot histograma de x
+   # Plot histograma de x
   plotMD(dge.norm, column=i)
   abline(h=0, col="red", lty=2, lwd=2)
 }
 
 ## Heatmap de la matriz de correlación
-
 heatmap(cor(logcounts1))
 ```
 
@@ -1254,7 +1230,6 @@ disp.all <- estimateDisp(dge.norm, robust=TRUE) # Ambas
 plotBCV(disp.all)
 
 ## Modelo QL
-
 fit <- glmQLFit(disp.all, robust=TRUE)
 head(fit$coefficients)
 plotQLDisp(fit)
@@ -1277,7 +1252,7 @@ disp$counts[detags.com, ]
 table(top$table$FDR <0.5)
 table(top$table$FDR <0.05)/nrow(top$table)
 
-hist(top$table$FDR, breaks=100, main="Histograma de FDR (ELI vs NIT")
+hist(top$table$FDR, breaks=100, main="Histograma de FDR (ELI vs NIT)")
 abline(v=0.05, col="red", lwd=3) # corte en α = 0.05
 
 # La funcion `decideTestDGE()` muestra la clasificación de los genes 
@@ -1289,7 +1264,7 @@ summary(de)
 # Gráfico plotSmear
 
 detags <- rownames(dge)[as.logical(de)]
-plotSmear(et, de.tags=detags, main="plotSmear entre los grupos NIT y ELI")
+plotSmear(et, de.tags=detags, main="plotSmear grupos NIT vs. ELI")
 abline(h=c(-1,1), col="blue")
 
 ```
@@ -1304,7 +1279,7 @@ head(top.1)[,-1]
 table(top.1$table$FDR <0.5)
 table(top.1$table$FDR <0.05)/nrow(top.1$table)
 
-hist(top.1$table$FDR, breaks=100, main="Histograma de FDR (SFI vs NIT)")
+hist(top.1$table$FDR, breaks=100, main="Histograma FDR (SFI vs NIT)")
 abline(v=0.05, col="red", lwd=3)
 
 de.1 <- decideTestsDGE(et.1)
@@ -1313,7 +1288,7 @@ summary(de.1)
 # Gráfico plotSmear
 
 detags.1 <- rownames(dge)[as.logical(de.1)]
-plotSmear(et.1, de.tags=detags.1, main="plotSmear entre los grupos SFI y NIT")
+plotSmear(et.1, de.tags=detags.1, main="plotSmear grupos SFI vs. NIT")
 abline(h=c(-1,1), col="blue")
 
 ```
@@ -1328,7 +1303,7 @@ head(top.2)[,-1]
 table(top.2$table$FDR <0.5)
 table(top.2$table$FDR <0.05)/nrow(top.2$table)
 
-hist(top.2$table$FDR, breaks=100, main="Histograma de FDR (SFI vs ELI)")
+hist(top.2$table$FDR, breaks=100, main="Histograma FDR (SFI vs ELI)")
 abline(v=0.05, col="red", lwd=3)
 
 de.2 <- decideTestsDGE(et.2)
@@ -1337,7 +1312,7 @@ summary(de.2)
 # Gráfico plotSmear
 
 detags.2 <- rownames(dge)[as.logical(de.2)]
-plotSmear(et.2, de.tags=detags.2, main="plotSmear entre los grupos SFI y ELI")
+plotSmear(et.2, de.tags=detags.2, main="plotSmear grupos SFI vs. ELI")
 abline(h=c(-1,1), col="blue")
 
 ```
@@ -1363,9 +1338,9 @@ plotDispEsts(dds.1, main="Dispersion plot")
 
 ### Transformación de los datos para su visualización
 
-```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=TRUE, tidy=TRUE}
 # Regularizada transformación log para clustering O heatmaps.
-rld <- rlogTransformation(dds.1)
+#rld <- rlogTransformation(dds.1)
 par(mfrow=c(1,2))
 hist(assay(rld), main = "Hist transf con rlog")
 
@@ -1377,7 +1352,7 @@ hist(assay(vsdata), main = "Hist transf con vst")
 
 ```{r eval=FALSE, message=FALSE, warning=FALSE, include=TRUE, tidy=TRUE}
 par(mfrow=c(1,3))
-plot(assay(rld))
+#plot(assay(rld))
 plot(assay(dds.1))
 plot(assay(vsdata))
 
@@ -1407,9 +1382,6 @@ pheatmap(assay(rld)[select,], cluster_rows=FALSE, show_rownames=FALSE,
 ### Análisis de componentes principales
 
 ```{r eval=FALSE, fig.height=5.5, message=FALSE, warning=FALSE, include=TRUE, tidy=TRUE}
-x <- c(1,2)
-m <- matrix(x, ncol = 2)
-layout(m)
 DESeq2::plotPCA(rld, intgroup="condition")
 # la función vst realizará una transformación estabilizadora de varianza
 plotPCA(vsdata, intgroup="condition") #usamos DESEQ2 plotPCA fxn
@@ -1419,7 +1391,7 @@ x <- c(1,1)
 m <- matrix(x, ncol = 2)
 layout(m)
 rld_pca <- function (rld, intgroup = "condition", ntop = 500, colors=NULL, 
-                     legendpos="bottomleft", main="PCA Biplot", textcx=0.55, ...) {
+              legendpos="bottomleft", main="PCA Biplot", textcx=0.55, ...) {
   require(genefilter)
   require(calibrate)
   library(calibrate)
@@ -1427,8 +1399,8 @@ rld_pca <- function (rld, intgroup = "condition", ntop = 500, colors=NULL,
   rv = rowVars(assay(rld))
   select = order(rv, decreasing = TRUE)[seq_len(min(ntop, length(rv)))]
   pca = prcomp(t(assay(rld)[select, ]))
-  fac = factor(apply(as.data.frame(colData(rld)[, intgroup, drop = FALSE]), 1, paste, 
-                     collapse = " : "))
+  fac = factor(apply(as.data.frame(colData(rld)[, intgroup, drop = FALSE]), 1, 
+                     paste,collapse = " : "))
   if (is.null(colors)) {
     if (nlevels(fac) >= 3) {
       colors = brewer.pal(nlevels(fac), "Paired")
@@ -1441,8 +1413,8 @@ rld_pca <- function (rld, intgroup = "condition", ntop = 500, colors=NULL,
   pc1lab <- paste0("PC1 (",as.character(pc1var),"%)")
   pc2lab <- paste0("PC1 (",as.character(pc2var),"%)")
   plot(PC2~PC1, data=as.data.frame(pca$x), bg=colors[fac], pch=21, xlab=pc1lab, ylab=pc2lab, main=main, ...)
-  with(as.data.frame(pca$x), textxy(PC1, PC2, labs=rownames(as.data.frame(pca$x)), 
-                                    cex=textcx))
+  with(as.data.frame(pca$x), textxy(PC1, PC2, labs=rownames(as.data.frame(pca$x)),
+                              cex=textcx))
   legend(legendpos, legend=levels(fac), col=colors, pch=20)
   #     rldyplot(PC2 ~ PC1, groups = fac, data = as.data.frame(pca$rld),
   #            pch = 16, cerld = 2, aspect = "iso", col = colours, main = draw.key(key = list(rect = list(col = colours),
@@ -1459,7 +1431,7 @@ rld_pca(rld, colors=mycols, intgroup="condition", xlim=c(-75, 35))
 res <- results(dds.1)
 ## Merge con datos normalizados y nuestra matriz de conteos
 resdata <- merge(as.data.frame(res), as.data.frame(counts(dds.1, normalized=TRUE)), 
-                 by="row.names", sort=FALSE)
+          by="row.names", sort=FALSE)
 ## GUARDAR LOS RESULTADOS
 write.csv(resdata, file="diffexpr-results.csv")
 
@@ -1541,8 +1513,8 @@ maplot <- function (res, thresh=0.05, labelsig=TRUE, textcx=0.6, ...) {
   with(subset(res, padj<thresh), points(baseMean, log2FoldChange, col="red", pch=20, cex=1.5))
   if (labelsig) {
     require(calibrate)
-    with(subset(res, padj<thresh), textxy(baseMean, log2FoldChange, labs=Gene, 
-                                          cex=textcx, col=2))
+    with(subset(res, padj<thresh), textxy(baseMean, log2FoldChange, labs=Gene,
+                                        cex=textcx, col=2))
   }
 }
 png("diffexpr-maplot.png", 1500, 1000, pointsize=20) #guardar en nuestro directorio
@@ -1552,23 +1524,23 @@ maplot(resdata, main="MA Plot")
 
 ### Comparativa entre grupos
 
-#### ELI y SFI
+#### ELI y NIT
 
 ```{r eval=FALSE, message=FALSE, warning=FALSE, include=TRUE, tidy=TRUE}
 
-res1 <- results(dds.1, contrast=c("condition","ELI","SFI"), alpha = 0.05)
+res1 <- results(dds.1, contrast=c("condition","ELI","NIT"), alpha = 0.05)
 summary(res1)
 
 res.ord1 <- res1[order(res1$padj),]
-head(res.ord1)[,1:6] # tabla de resultados ordenados por p-value
+head(res.ord1)[,1:6]
 
 resadj1 = subset(res1, padj < 0.05)
-summary(resadj1) # padj menores a 0.05
+summary(resadj1)
 
 sum(res1$padj <= 0.05, na.rm=TRUE)
 
 # realizamos un basico volcano plot
-with(res1, plot(log2FoldChange, -log10(pvalue), pch=20, main="Volcano plot", xlim=c(-3,3)))
+with(res1, plot(log2FoldChange, -log10(pvalue), pch=20, main="Volcano plot ELI vs. NIT", xlim=c(-3,3)))
 
 # anadimos los colores: azul si padj<0.01, rojo if log2FC>1 y padj<0.05)
 with(subset(res1, padj<.01 ), points(log2FoldChange, -log10(pvalue), pch=20, col="blue"))
@@ -1583,11 +1555,11 @@ genes_down1<-as.data.frame(subset(res1, log2FoldChange <= -1))
 dim(genes_down1)
 ```
 
-#### ELI y NIT
+#### SFI y NIT
 
 ```{r eval=FALSE, message=FALSE, warning=FALSE, include=TRUE, tidy=TRUE}
 
-res2 <- results(dds.1, contrast=c("condition","ELI","NIT"), alpha = 0.05)
+res2 <- results(dds.1, contrast=c("condition","SFI","NIT"), alpha = 0.05)
 summary(res2)
 
 res.ord2 <- res2[order(res2$padj),]
@@ -1599,7 +1571,7 @@ summary(resadj2)
 sum(res2$padj <= 0.05, na.rm=TRUE)
 
 # realizamos un basico volcano plot
-with(res2, plot(log2FoldChange, -log10(pvalue), pch=20, main="Volcano plot", xlim=c(-3,3)))
+with(res2, plot(log2FoldChange, -log10(pvalue), pch=20, main="Volcano plot SFI vs. NIT", xlim=c(-3,3)))
 
 # anadimos los colores: azul si padj<0.01, rojo if log2FC>1 y padj<0.05)
 with(subset(res2, padj<.01 ), points(log2FoldChange, -log10(pvalue), pch=20, col="blue"))
@@ -1614,23 +1586,23 @@ genes_down2<-as.data.frame(subset(res2, log2FoldChange <= -1))
 dim(genes_down2)
 ```
 
-#### NIT y SFI
+#### SFI y ELI
 
 ```{r eval=FALSE, message=FALSE, warning=FALSE, include=TRUE, tidy=TRUE}
 
-res3 <- results(dds.1, contrast=c("condition","NIT","SFI"), alpha = 0.05)
+res3 <- results(dds.1, contrast=c("condition","SFI","ELI"), alpha = 0.05)
 summary(res3)
 
 res.ord3 <- res3[order(res3$padj),]
-head(res.ord3)[,1:6]
+head(res.ord3)[,1:6] # tabla de resultados ordenados por p-value
 
 resadj3 = subset(res3, padj < 0.05)
-summary(resadj3)
+summary(resadj3) # padj menores a 0.05
 
 sum(res3$padj <= 0.05, na.rm=TRUE)
 
 # realizamos un basico volcano plot
-with(res3, plot(log2FoldChange, -log10(pvalue), pch=20, main="Volcano plot", xlim=c(-3,3)))
+with(res3, plot(log2FoldChange, -log10(pvalue), pch=20, main="Volcano plot SFI vs. ELI", xlim=c(-3,3)))
 
 # anadimos los colores: azul si padj<0.01, rojo if log2FC>1 y padj<0.05)
 with(subset(res3, padj<.01 ), points(log2FoldChange, -log10(pvalue), pch=20, col="blue"))
@@ -1647,13 +1619,13 @@ dim(genes_down3)
 
 #### Gráfico de diferencia de medias
 
-```{r eval=FALSE, fig.height=6.5, message=FALSE, warning=FALSE, include=TRUE, tidy=TRUE}
+```{r eval=FALSE, fig.height=5.5, message=FALSE, warning=FALSE, include=TRUE, tidy=TRUE}
 
-DESeq2::plotMA(res1, main="MA-plot DESeq2", ylim=c(-2,2))
+DESeq2::plotMA(res1, main="MA-plot DESeq2 ELI vs. NIT", ylim=c(-2,2))
 abline(h=c(-1,1), col="dodgerblue", lwd=2)
-DESeq2::plotMA(res2, main="MA-plot DESeq2", ylim=c(-2,2))
+DESeq2::plotMA(res2, main="MA-plot DESeq2 SFI vs. NIT", ylim=c(-2,2))
 abline(h=c(-1,1), col="dodgerblue", lwd=2)
-DESeq2::plotMA(res3, main="MA-plot DESeq2", ylim=c(-2,2))
+DESeq2::plotMA(res3, main="MA-plot DESeq2 SFI vs. ELI", ylim=c(-2,2))
 abline(h=c(-1,1), col="dodgerblue", lwd=2)
 
 ```
