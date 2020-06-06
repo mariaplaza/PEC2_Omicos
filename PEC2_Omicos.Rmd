@@ -131,6 +131,7 @@ if(!require(pheatmap)) BiocManager::install("pheatmap")
 if(!require(org.Hs.eg.db)) BiocManager::install("org.Hs.eg.db")
 if(!require(GEOquery)) BiocManager::install("GEOquery")
 if(!require(genefilter)) BiocManager::install("genefilter")
+if(!require(limma)) BiocManager::install("limma")
 
 ```
 
@@ -1147,7 +1148,6 @@ Ya que según los resultados en porcentajes y números de las dos tablas anterir
 ```{r echo=FALSE}
 (top.2)[1:10,-1]
 ```
-
 
 # Discusión
 
