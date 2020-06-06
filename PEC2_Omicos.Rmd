@@ -6,13 +6,6 @@ date: '`r format(Sys.Date(),"%e de %B, %Y")`'
 citecolor: blue
 urlcolor: blue
 output:
-  html_document:
-    df_print: paged
-    toc: yes
-    fig_caption: yes
-    toc_float: true
-    theme: united
-    highlight: tango
   pdf_document: 
     df_print: kable
     fig_caption: yes
@@ -22,6 +15,13 @@ output:
     number_sections: yes
     toc: yes
     toc_depth: 3
+  html_document:
+    df_print: paged
+    toc: yes
+    fig_caption: yes
+    toc_float: true
+    theme: united
+    highlight: tango
   word_document:
     toc: true
 link-citations: yes
@@ -495,7 +495,7 @@ summary(de)
 
 La mayoria de los genes se muestran como no significativos. El número total de genes con un valor de FDR inferior al nivel de significación (\alpha = 0,05) fue de 5975 De estos genes, 2042 se identificaron como sobrerregulados y 3933 como infrarregulados.
 
-Para visualizar gráficamente los genes identificados como DE respecto a la totalidad, se emplea el gráfico obtenido con la función `plotSmear` [Figura 10] que muestra los cambios log-fold-tagwise contra log-cpm (análogo a un gráfico MA para datos de microarrays). Los genes diferencialmente expresados se muestran resaltados en rojo [Figura 10]:
+Para visualizar gráficamente los genes identificados como DE respecto a la totalidad, se emplea el gráfico obtenido con la función `plotSmear` [Figura 10] que muestra los cambios log-fold-tagwise contra log-cpm (análogo a un gráfico MA para datos de microarrays). Los genes diferencialmente expresados se muestran resaltados en rojo.
 ```{r echo=FALSE, fig.show = "hold", fig.height=4, fig.width=4, message=FALSE, warning=FALSE, tidy=TRUE, fig.cap='plotSmear NIT vs. ELI'}
 detags <- rownames(dge)[as.logical(de)]
 plotSmear(et, de.tags=detags)
@@ -569,7 +569,6 @@ knitr::kable(table(top.2$table$FDR <0.05)/nrow(top.2$table))
 ```
 
 El siguiente histograma muestra el análisis de la proporción de DGEs en esta compración:
-
 ```{r echo=FALSE, fig.height=3.5, message=FALSE, warning=FALSE, tidy=TRUE, fig.cap='Histograma FDR (SFI vs. ELI)',fig.show = "hold"}
 
 hist(top.2$table$FDR, breaks=100, xlab="FDR", main="")
@@ -587,7 +586,7 @@ summary(de.2)
 
 El número total de genes con un valor de FDR inferior al nivel de significación (\alpha = 0,05) fue de 6515. De estos genes, 3333 se identificaron como infrarregulados y 2282 como sobrerregulados.
 
-El gráfico `plotSmear` que muestra los cambios log-fold-tagwise contra log-cpm donde los genes diferencialmente expresados se muestran resaltados en rojo en la Figura 14. En este caso un hay buen número, al igual que con la primera comparacion entre los grupos NIT y ELI.
+El gráfico `plotSmear` que muestra los cambios log-fold-tagwise contra log-cpm donde los genes diferencialmente expresados se muestran resaltados en rojo en la Figura 14. En este caso un hay buen número, al igual que con la primera comparacion entre los grupos NIT y ELI [Figura 14].
 ```{r echo=FALSE, fig.show = "hold", fig.height=4, fig.width=4, message=FALSE, warning=FALSE, tidy=TRUE, fig.cap='plotSmear SFI vs. ELI'}
 detags.2 <- rownames(dge)[as.logical(de.2)]
 plotSmear(et.2, de.tags=detags.2)
@@ -682,24 +681,8 @@ Podemos ver cómo los genes con recuentos bajos, es decir, que aportan poca info
 
 De forma complementaria al estudio de los datos, se ha podido realizar un análisis que indique si existe alguna relación entre las muestras, es decir, si hay algunas similitudes entre ellas, mediante un análisis de distancias, usando la función `dist`.
 
-Para ello realizamos el siguiente *heatmap* donde se pueden observar los genes diferencialmente expresados, y así conseguir una información muy visual que puede ayudar a extraer el sentido biológico junto a los datos que obtendremos posteriormente. De este modo, se puede observar qué genes están más sobreexpresados en las diferentes condiciones, agrupadas de manera jerárquica en el dendograma [Figura 18].
-```{r echo=FALSE, fig.height=6.5, fig.width=7, message=FALSE, warning=FALSE, tidy=TRUE, fig.cap='Heatmap que representa las distancias entre las distintas muestras', fig.show = "hold"}
-# Definimos los colores para el gráfico empleando RColorBrewer
-library(RColorBrewer)
-mycols <- brewer.pal(8, "Dark2")[1:length(unique(condition))]
-
-# heatmap de los valores transformados de las muestras
-sampleDists <- as.matrix(dist(t(assay(rld))))
-library(gplots)
-#png("qc-heatmap-samples.png", w=1000, h=1000, pointsize=20)
-heatmap.2(as.matrix(sampleDists), key=F, trace="none",col=colorpanel(100, "black", 
-                                                                     "white"),
-          ColSideColors=mycols[condition], RowSideColors=mycols[condition],margin=c(10, 10),
-          main="Sample Distance Matrix")
-```
-
-Por otro lado, realizando el mismo tipo de gráfico, podemos comprobar las relaciones entre los genes más variables dentro de las muestras. Usando en este caso la transformación vsd, seleccionemos los 10 genes con la mayor varianza entre las muestras [Figura 19]:
-```{r echo=FALSE, fig.align='center', fig.show = "hold", fig.height=6, fig.width=7, message=FALSE, fig.cap='Heatmap que representa las distancias entre 10 genes con la mayor varianza'}
+Para ello realizamos el siguiente *heatmap* donde se pueden observar los genes diferencialmente expresados, y así conseguir una información muy visual que puede ayudar a extraer el sentido biológico junto a los datos que obtendremos posteriormente. De este modo, se puede observar qué genes están más sobreexpresados en las diferentes condiciones, agrupadas de manera jerárquica en el dendograma [Figura 18]. Usamos en este caso la transformación vsd y seleccionamos los 10 genes con la mayor varianza entre las muestras.
+```{r echo=FALSE, fig.align='center', fig.show = "hold", fig.height=6, fig.width=8, message=FALSE, fig.cap='Heatmap que representa las distancias entre 10 genes con la mayor varianza'}
 
 library(pheatmap)
 topVarGenes <- head(order(rowVars(assay(vsdata)), decreasing = TRUE), 10)
@@ -713,17 +696,16 @@ pheatmap(mat, annotation_col = anno)
 
 ### Análisis de componentes principales
 
-De forma complementaria al análisis de agrupamientos, se ha analizado también la similitud entre muestras mediante el análisis de componentes principales (PCA),con la función `plotPCA`. En esta gráfica, las muestras se proyectan de manera que se extienden en dos direcciones que explican la mayoría de las diferencias entre ellas. El eje x es la dirección que más separa los puntos de datos, el eje y es una dirección ortogonal a la primera, que es la segunda que más separa los datos. El porcentaje de la varianza total que está contenida en la dirección se puede ver en la etiqueta del eje.
-```{r echo=FALSE, fig.show = "hold", message=FALSE, warning=FALSE, tidy=TRUE, fig.cap='Análisis de componentes principales entre las muestras transformadas de forma logarítmica', fig.show = "hold"}
-plotPCA(rld, intgroup="condition")
-```
+De forma complementaria al análisis de agrupamientos, se ha analizado también la similitud entre muestras mediante el análisis de componentes principales (PCA). En esta gráfica, las muestras se proyectan de manera que se extienden en dos direcciones que explican la mayoría de las diferencias entre ellas. El eje x es la dirección que más separa los puntos de datos, el eje y es una dirección ortogonal a la primera, que es la segunda que más separa los datos. El porcentaje de la varianza total que está contenida en la dirección se puede ver en la etiqueta del eje.
 
 Los grupos aparecen algo separados pero el porcentaje de variabilidad explicado por las dos primeras componentes sugiere que pueden ser muy explicativas.
 
 Vemos que hay una leve separación entre los tres grupos. NIT está claramente condicionado a la izquierda, y ELI a la derecha. Sin embargo, hay una muestra del grupo ELI que se encuentra muy distanciada del resto de muestras de su grupo. El grupo SFI está distribuido de forma desigual en todo el gráfico.
 
-Podemos detectar cuáles son las muestras que se encuentran  estrañamente distribuidas si incluimos los nombres de las muestras en el gráfico [Figura 21].
+Podemos detectar cuáles son las muestras que se encuentran  estrañamente distribuidas si incluimos los nombres de las muestras en el gráfico [Figura 19].
 ```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE, fig.cap='Análisis de componentes principales entre las muestras transformadas de forma logarítmica', fig.show = "hold"}
+library(RColorBrewer)
+mycols <- brewer.pal(8, "Dark2")[1:length(unique(condition))]
 
 rld_pca <- function (rld, intgroup = "condition", ntop = 500, colors=NULL, 
                      legendpos="bottomleft", main="PCA Biplot", textcx=0.55, ...) {
@@ -755,8 +737,8 @@ rld_pca <- function (rld, intgroup = "condition", ntop = 500, colors=NULL,
 #png("qc-pca.png", 1000, 1000, pointsize=20)
 rld_pca(rld, colors=mycols, intgroup="condition", xlim=c(-50, 75))
 ```
-
 \pagebreak
+
 ### PlotCounts
 
 También puede ser útil examinar los recuentos de lecturas de un solo gen en todos los grupos. Una función simple para hacer este gráfico es `plotCounts`, que normaliza los recuentos mediante la secuencia de profundidad y agrega un pseudocuenta de 1/2 para permitir el trazado de la escala logarítmica. Los recuentos se agrupan por las variables en `intgroup`, donde se puede especificar más de una variable. Aquí especificamos los genes que tenía el valor p más pequeño de la tabla de resultados creada anteriormente y observamos los valores en los distintos grupos.
@@ -860,7 +842,7 @@ y con la regulación up más elevada:
 knitr::kable(head(resSig1[ order(resSig1$log2FoldChange, decreasing = TRUE), ]))
 ```
 
-Los volcano-plots permiten visualizar si hay muchos o pocos genes con un gran fold-change y significativamente expresados o si este núumero es bajo. Estos gráaficos representan en abscisas los cambios de expresión en escala logarítmica y en ordenadas el "menos logaritmo" del p-valor [Figura 23].
+Los volcano-plots permiten visualizar si hay muchos o pocos genes con un gran fold-change y significativamente expresados o si este núumero es bajo. Estos gráaficos representan en abscisas los cambios de expresión en escala logarítmica y en ordenadas el "menos logaritmo" del p-valor [Figura 21].
 ```{r echo=FALSE, message=FALSE, warning=FALSE, fig.cap='volcano plot que visualiza los rangos del p-value y foldchange entre los grupos ELI vs. NIT', fig.show = "hold", fig.height=4, fig.width=4}
 
 # realizamos un basico volcano plot
@@ -873,7 +855,7 @@ with(subset(res1, padj<.01 & abs(log2FoldChange)>2), points(log2FoldChange, -log
 
 **MA plot**
 
-Los resultados del análisis de expresión diferencial bajo `DESeq2` se pueden visualizar mediante gráficos MA-Plot. Este tipo de gráficos se genera al representar la media de lecturas normalizadas de cada gen frente al logaritmo en base 2 del fold-change.
+Los resultados del análisis de expresión diferencial bajo `DESeq2` se pueden visualizar mediante gráficos MA-Plot. Este tipo de gráficos se genera al representar la media de lecturas normalizadas de cada gen frente al logaritmo en base 2 del fold-change [Figura 22].
 ```{r echo=FALSE, message=FALSE, warning=FALSE, fig.cap='MA plot con la matriz de comparacion entr los tres grupos de las medias normalizadas de cada gen respecto a log foldchange', fig.show = "hold", fig.height=4, fig.width=4}
 
 ## MA plot with "significant" genes labeled
@@ -895,7 +877,6 @@ maplot(resOrdered1, main="MA Plot")
 ### SFI *vs* NIT
 
 Creamos el objeto `res` para comparar ambos grupos y vemos el resumen y la tabla de los resultados,  fijando el umbral de la tasa de descubrimiento falso a un \alpha = 0.05, al igual que en el caso anterior:
-
 ```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
 
 res2 <- results(dds.2, contrast=c("condition","SFI","NIT"), alpha = 0.05)
@@ -956,7 +937,7 @@ y con la regulación up más fuerte:
 knitr::kable(head(resSig2[ order(resSig2$log2FoldChange, decreasing = TRUE), ]))
 ```
 
-Veamos el volcano plot correspondiente [Figura 25] y el MA plot [Figrua 26] de esta comparativa:
+Veamos el volcano plot correspondiente [Figura 23] y el MA plot [Figrua 24] de esta comparativa:
 ```{r echo=FALSE, message=FALSE, warning=FALSE, fig.cap='volcano plot que visualiza los rangos del p-value y foldchange entre los grupos ELI vs. NIT', fig.show = "hold", fig.height=4, fig.width=4}
 
 # realizamos un basico volcano plot
@@ -1047,7 +1028,7 @@ y con log2FoldChange up máximo:
 knitr::kable(head(resSig3[ order(resSig3$log2FoldChange, decreasing = TRUE), ]))
 ```
 
-Veamos el volcano plot correspondiente [Figura 27] y el MA plot [Figrua 28] de esta comparativa:
+Veamos el volcano plot correspondiente [Figura 25] y el MA plot [Figrua 26] de esta comparativa:
 ```{r echo=FALSE, fig.show = "hold", fig.height=4, fig.width=4, message=FALSE, warning=FALSE, fig.cap='volcano plot que visualiza los rangos del p-value y foldchange entre los grupos ELI vs. NIT'}
 
 # realizamos un basico volcano plot
@@ -1079,7 +1060,7 @@ maplot(resOrdered3, main="MA Plot")
 
 ## Gráfico de diferencia de medias
 
-Una gráfica de diferencia de medias (MA-PLOT) permite visualizar la distribución de los coeficientes estimados en el modelo, como pueden ser las comparaciones entre genes. En el eje y se sitúa el valor del LFC, mientras que en el eje x se sitúan las medias de los counts normalizados. En DESeq2, la función plotMA muestra los cambios de pliegue log2 atribuibles a una variable dada sobre la media de los recuentos normalizados para todas las muestras en el `DESeqDataSet` . Los puntos serán de color azul si el valor p ajustado es menor que 0.1. Los puntos que se caen de la ventana se trazan como triángulos abiertos que apuntan hacia arriba o hacia abajo [Figuras 29, 30, 31].
+Una gráfica de diferencia de medias (MA-PLOT) permite visualizar la distribución de los coeficientes estimados en el modelo, como pueden ser las comparaciones entre genes. En el eje y se sitúa el valor del LFC, mientras que en el eje x se sitúan las medias de los counts normalizados. En DESeq2, la función plotMA muestra los cambios de pliegue log2 atribuibles a una variable dada sobre la media de los recuentos normalizados para todas las muestras en el `DESeqDataSet` . Los puntos serán de color azul si el valor p ajustado es menor que 0.1. Los puntos que se caen de la ventana se trazan como triángulos abiertos que apuntan hacia arriba o hacia abajo [Figuras 27, 28, 29].
 
 ```{r echo=FALSE, fig.height=4, message=FALSE, warning=FALSE, tidy=TRUE, fig.cap='Gráfico de la diferencia de medias en ELI vs. NIT', fig.show = "hold"}
 
