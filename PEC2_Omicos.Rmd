@@ -8,8 +8,12 @@ urlcolor: blue
 output:
   pdf_document: 
     df_print: kable
+    fig_caption: yes
     highlight: tango
+    keep_tex: yes
+    latex_engine: xelatex
     number_sections: yes
+    toc_depth: 3
     toc: yes
   html_document:
     df_print: paged
@@ -53,35 +57,6 @@ options(width=90)
 Sys.setlocale("LC_TIME", "C")
 ```
 
-
-```{r packages, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
-
-libraries <- c("htmltools", "bookdown", "bibtex" ,"knitr","dplyr", "printr", "Biobase", 
-               "methods", "affy", "GEOquery", "simpleaffy", "arrayQualityMetrics",
-               "biocLite", "pvca", "genefilter", "gcrma","plier", "mas5", "pheatmap",
-               "RColorBrewer")
-check.libraries <- is.element(libraries, installed.packages()[, 1])==FALSE
-libraries.to.install <- libraries[check.libraries]
-if (length(libraries.to.install!=0)) {
-  install.packages(libraries.to.install)
-}
-
-success <- sapply(libraries,require, quietly = FALSE,  character.only = TRUE)
-if(length(success) != length(libraries)) {stop("A package failed to return 
-                                               a success in require() function.")}
-
-if(!require(DESeq2)) BiocManager::install("DESeq2")
-if(!require(BiocManager)) install.packages("BiocManager")
-if(!require(GenomicFeatures)) BiocManager::install("GenomicFeatures")
-if(!require(DESeq2)) BiocManager::install("edgeR")
-if(!require(pheatmap)) BiocManager::install("pheatmap")
-if(!require(org.Hs.eg.db)) BiocManager::install("org.Hs.eg.db")
-if(!require(AnnotationDbi)) BiocManager::install("AnnotationDbi")
-if(!require(apeglm)) BiocManager::install("apeglm")
-if(!require(Gviz)) BiocManager::install("Gviz")
-
-```
-
 **Repositorio Github:**
 
 https://github.com/mariaplaza/PEC2_Omicos
@@ -116,6 +91,7 @@ Con la información de la muestras (subset) obtenidas, se han *subseteado* estas
 ## Procedimiento general de análisis (pipeline)
 
 El pipeline da análisis de datos de RNA-seq es parecido al de microarrays salvo algunos pasos.
+Se ha realizado siguiendo las pautas descritas en la guia de usuario desarrollada por @@chen2014edger y @love2019analyzing.
 Básicamente los pasos seguidos son:
 
 1. Lectura y preparación de los datos
@@ -129,13 +105,40 @@ Básicamente los pasos seguidos son:
 9. Análisis de expresión diferencial
    9.1 Identificación de genes diferencialmente expresados
 
+El código siguiente se utilizó para instalar los paquetes de Bioconductor necesarios para el análisis:
+
+```{r packages, eval=FALSE, message=FALSE, warning=FALSE, include=TRUE}
+
+libraries <- c("htmltools", "bookdown", "bibtex" ,"knitr","dplyr", "printr", "Biobase", 
+               "methods", "affy", "GEOquery", "simpleaffy", "arrayQualityMetrics",
+               "biocLite", "pvca", "genefilter", "gcrma","plier", "mas5", "pheatmap",
+               "RColorBrewer", "ggplot2")
+check.libraries <- is.element(libraries, installed.packages()[, 1])==FALSE
+libraries.to.install <- libraries[check.libraries]
+if (length(libraries.to.install!=0)) {
+  install.packages(libraries.to.install)
+}
+
+success <- sapply(libraries,require, quietly = FALSE,  character.only = TRUE)
+if(length(success) != length(libraries)) {stop("A package failed to return 
+                                               a success in require() function.")}
+
+if(!require(DESeq2)) BiocManager::install("DESeq2")
+if(!require(BiocManager)) install.packages("BiocManager")
+if(!require(GenomicFeatures)) BiocManager::install("GenomicFeatures")
+if(!require(DESeq2)) BiocManager::install("edgeR")
+if(!require(pheatmap)) BiocManager::install("pheatmap")
+if(!require(org.Hs.eg.db)) BiocManager::install("org.Hs.eg.db")
+if(!require(GEOquery)) BiocManager::install("GEOquery")
+if(!require(genefilter)) BiocManager::install("genefilter")
+
+```
+
 ## Software empleado
 
-Se han empleado dos paquetes de Bioconductor: edgeR [@robinson2010edger] y DESeq2 [@love2014differential] para el análisis de los datos bajo el test Binomial Negativo, ya que ambos paquetes poseen un material estadístico potente, especialmente DESeq2. Su método de normalización es el denominado RPKM (Reads Per Kilobase of transcript and Million mapped reads). Así, la normalización previa en este paquete no es necesaria, lo cual es una ventaja. Aun asi, se ha empleado tambien el paquete edgeR para poder tener más referencias.
+Los análisis estadísticos se han realizado utilizando el lenguaje estadístico `R` y las dos librerías desarrolladas para el análisis de RNA-seq en el proyecto de Bioconductor (www.bioconductor.org). Se han empleado dos paquetes: `edgeR` [@robinson2010edger] y `DESeq2` [@love2014differential] para el análisis de los datos bajo el test Binomial Negativo, ya que ambos paquetes poseen un material estadístico potente, especialmente DESeq2. Su método de normalización es el denominado RPKM (Reads Per Kilobase of transcript and Million mapped reads). Así, la normalización previa en este paquete no es necesaria, lo cual es una ventaja. Aun asi, se ha empleado tambien el paquete edgeR para poder tener más referencias.
 
-## Lectura de los datos
-
-En primer lugar veamos ambos archivos de los que disponemos. La tabla de contajes (counts) y la tabla de muestras (targets) proporcionadas:
+# Obtención y lectura de los datos
 
 ```{r datos1, include=FALSE}
 library(readr)
@@ -152,9 +155,11 @@ targets <- read_delim(file=file.path(params$folder.data,params$file2),",",
                       col_names = TRUE)
 ```
 
+En primer lugar veamos ambos archivos de los que disponemos. La tabla de contajes (`counts`) y la tabla de muestras (`targets`) proporcionadas:
+
 ```{r echo=FALSE}
-head(counts, caption = "tabla de contajes")[,1:3]
-head(targets, caption = "tabla de las muestras")[,1:5]
+print(head(counts, caption = "tabla de contajes")[,1:3])
+print(head(targets, caption = "tabla de las muestras")[,1:5])
 ```
 
 El nombre de las filas en `counts` pertenece a las claves de tipo "ENSEMBL", conteniendo un punto y la versión de éste. Eliminamos la version y el punto para que posteriormente podamos emplear la AnnotationDBI para mapear mediante DESeq, si es necesario. Por otro lado, convertimos la matriz de caracteres a numéricos con el nombre de cada fila y columna, para poder trabajar con ellas. De esta forma nos quedan las siguientes tablas con las que vamos a trabajar y vemos las dimensiones de cada una de ellas para comprobar que están completas:
@@ -176,8 +181,8 @@ targets <- read_delim(file=file.path(params$folder.data,params$file2),",",
                       col_names = TRUE)
 #length(complete.cases(targets))
 
-head(conteos.data.frame, caption = "tabla de contajes")[,1:3]
-head(targets, caption = "tabla de las muestras")[,1:5]
+print(head(conteos.data.frame, caption = "tabla de contajes")[,1:3])
+print(head(targets, caption = "tabla de las muestras")[,1:5])
 
 ```
 
@@ -218,7 +223,7 @@ muestra_sfi <- targets %>%
 
 #Unir los grupos en un data frame
 subset <- rbind(muestra_nit,muestra_eli, muestra_sfi)
-head(subset)[,1:5] #primeras 6 filas del archivo
+print(head(subset)[,1:5]) #primeras 6 filas del archivo
 ```
 
 ## Crear la matriz con las dimensiones del subset
@@ -231,11 +236,11 @@ counts.subset<- dplyr::select(conteos.data.frame, contains(subset$Sample_Name))
 dim(counts.subset)
 ```
 
-## Análisis con el paquete edgeR
+# Análisis con el paquete edgeR
 
 Ya que el paquete DESeq2 realiza la normalización de forma automática, separamos aqui el análisis de los dos paquetes.
 
-### Preparación de los datos: Anotación, filtrado y normalización
+## Preparación de los datos
 
 Esta estapa incluye dos pasos muy importantes antes del análisis: filtrado de genes con baja o nula expresión y evaluación de la calidad de los datos.
 
@@ -248,7 +253,7 @@ dge <- DGEList(counts=counts.subset, group=subset$Group, genes = counts$X1)
 dim(dge)
 ```
 
-**Anotación**
+### Anotación
 
 Nuestra tabla de resultados hasta ahora solo contiene las ID de genes de Ensembl, pero los nombres de genes alternativos pueden ser más informativos para la interpretación. Los paquetes de anotación de Bioconductor ayudan a mapear varios esquemas de identificación entre sí. Cargamos el paquete AnnotationDbi y el paquete de anotación org.Hs.eg.db. Este es el paquete de anotación de organismos ("org") para el Homo sapiens ("Hs"), organizado como un paquete de base de datos AnnotationDbi ("db"), utilizando ID de genes de Entrez ("eg") como clave principal.
 Podemos usar la función mapIds para agregar columnas individuales a nuestra tabla de resultados. Proporcionamos los nombres de fila de nuestra tabla de resultados como una clave, y lo especificamos keytype=ENSEMBL.
@@ -271,18 +276,18 @@ dge$genes$entrez <- mapIds(org.Hs.eg.db,
                      keytype="ENSEMBL",
                      multiVals="first")
 
-head(dge$genes)
+print(head(dge$genes))
 ```
 
 Sin embargo, aproximadamente la mitad de los genes se muestran como NA, por lo que entiendo que no se han reconocido como genes o la anotación no es la adecuada. Por ello, al final, no lo he utilizado en la interpretacion de los análisis.
 
-**Filtrado y eliminación de genes con baja expresión**
+### Filtrado y eliminación de genes con baja expresión
 
 Generalmente, en las matrices de conteos hay un cierto número de genes que presentan pocas o ninguna lectura en todas o la mayoría de las muestras, como ocurre en nuestro caso. Estos genes, pueden no ser de interés puesto que el objetivo de los estudios de expresión génica diferencial es determinar aquellos genes cuyo nivel de expresión es significativamente diferente entre los distintos grupos a comparar. Por supuesto, este paso es subjetivo, ya que algunos investigadores creen que no se deben eliminar datos ya que el echo de que se presenten pocas lecturas en también un importante dato. Sin embargo, ya que el número de genes es muy elevado, he procedido al filtrado de los genes que no mostraban un nivel de expresión significativo, con el fin de mejorar la visibilidad y la interpretación de los resultados.
 
 Para ello, en primer lugar se realizó una transformación de los datos con el fin de tener en una misma escala todas las muestras y evitar, así, diferencias debido al distinto tamaño de las librerías. La transformación que se llevó a cabo fue la conversión de las lecturas a CPM (conteos por millón). En este caso, ya que los grupos son pequeños, no más de diez muestras cada grupo, se mantendrán los genes que logran al menos 0.01 cpm de tres. Vemos la nueva dimensión de nuestra matriz de trabajo:
 
-```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
+```{r message=FALSE, warning=FALSE, tidy=TRUE}
 # Paso de los datos a CPM conteos por millón, con la función cpm del paquete edgeR.
 library(edgeR)
 select.genes <- rowSums(cpm(dge)>0.01) >= 3
@@ -305,7 +310,7 @@ dge$samples$lib.size <- colSums(dge$counts)
 dge$samples$lib.size # Nuevo tamaño de la librería
 ```
 
-**Normalización**
+### Normalización
 
 Durante la preparación de la muestra o el proceso de secuenciación, los factores externos que no son de interés biológico pueden afectar la expresión de muestras individuales. Por ejemplo, las muestras procesadas en el primer lote de un experimento pueden tener una mayor expresión general en comparación con las muestras procesadas en un segundo lote. Se supone que todas las muestras deben tener un rango y distribución de valores de expresión similares. Se requiere, por tanto, la normalización para garantizar que las distribuciones de expresión de cada muestra sean similares en todo el experimento.
 
@@ -320,7 +325,7 @@ boxplot(logcounts, xlab="", ylab="Log2 counts per million",las=1, cex.axis = 0.6
 abline(h=median(logcounts),col="blue")
 ```
 
-De los diagramas de caja vemos que, en general, las distribuciones de densidad de las intensidades logarítmicas en bruto no son idénticas pero tampoco muy diferentes. Si una muestra está realmente muy por encima o por debajo de la línea horizontal azul, es posible que necesitemos investigar más a fondo esa muestra.
+De los diagramas de caja vemos que, en general, las distribuciones de densidad de las intensidades logarítmicas en bruto no son idénticas pero tampoco muy diferentes. Si una muestra está realmente muy por encima o por debajo de la línea horizontal azul, es posible que necesitemos investigar más a fondo esa muestra. Conveniente normalizar pero no parece que hayan muestras problemáticas.
 
 Por otro lado, en general, se considera que la normalización de TMM o método de la media recortada [@robinson2010scaling] es satisfactoria para casi todos los experimentos de expresión de genes de ARNm bien diseñados. Por lo que la vamos a realizar en nuestro caso.
 
@@ -328,7 +333,7 @@ La normalización por el método TMM se realiza utilizando la función `calcNorm
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
 dge.norm <- calcNormFactors(dge)
-head(dge.norm$samples)
+print(head(dge.norm$samples))
 ```
 
 Tras hacer la normalización la columna donde aparece los factores de normalización cambia, ya que antes estaban los valores por defecto que le asignaba la función DGEList.
@@ -343,7 +348,7 @@ boxplot(logcounts1, xlab="", ylab="Log2 counts per million",las=1, cex.axis = 0.
 abline(h=median(logcounts1),col="blue")
 ```
 
-### Exploración de los datos
+## Exploración de los datos
 
 El gráfico MDS (Multidimensional scaling plot of distances) muestra la relación entre todas las muestras. El análisis que realiza este gráfico es similar a un PCA, es decir, al análisis de componentes principales. Es una herramienta increíblemente útil para el control de calidad y la comprobación de valores atípicos:
 
@@ -368,8 +373,8 @@ La mayor parte de los genes se centran alrededor de la línea de log-fold change
 
 Es una buena práctica hacer gráficos MD para todas las muestras como un control de calidad, siempre que no sean demasiadas. Veamos como se distribuyen nuestras muestras:
 
-```{r echo=FALSE, fig.cap='Gráfico MD de las 30 muestras', fig.height=4.5, message=FALSE, warning=FALSE, tidy=TRUE}
-par(mfrow=c(3,2))
+```{r echo=FALSE, fig.cap='Gráfico MD de las 30 muestras', fig.height=9, fig.width= 10, message=FALSE, warning=FALSE, tidy=TRUE}
+par(mfrow=c(6,5))
 # Create the loop.vector (all the columns)
 loop.vector <- 1:30
 
@@ -392,7 +397,7 @@ cimColor <- colorRampPalette(rev(brewer.pal(9, "Blues")))(255)[255:1]
 heatmap(cor(logcounts1), col=cimColor)
 ```
 
-### Estimación de la dispersión
+## Estimación de la dispersión
 
 El paquete `edgeR` usa la distribución binomial negativa (NB) para modelar los recuentos de lectura para cada gen en cada muestra. El parámetro de dispersión de la distribución NB explica la variabilidad entre repeticiones biológicas [@mccarthy2012differential]. El primer paso del análisis consiste en estimar la dispersión de cada transcrito a partir de la variabilidad total para todos los genes. El método que emplea `edgeR` para el cálculo de la dispersión común en el caso de experimentos que se ajusten al enfoque clásico de EdgeR (comparaciones por pares entre grupos, experimentos de un solo factor) es el método qCML (de las siglas en inglés quantile-adjusted Conditional Maximum Likelihood). El estimador qCML, comparado con otros estimadores (estimador de máxima verosimilitud, el estimador de cuasi-verosimilitud, etc), es el que mejor funciona con datos de secuenciación de NGS y el más fiable cuando se trabaja con un número bajo de muestras.
 
@@ -401,7 +406,6 @@ A partir del objeto *DGEList* normalizado, se procedió a la estimación en un �
 ```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE}
 
 disp <- estimateCommonDisp(dge.norm,verbose=TRUE)
-
 disp.all <- estimateDisp(dge.norm, robust=TRUE)
 
 # Al calcular la dispersión común añadiremos como atributo en la función 
@@ -417,7 +421,6 @@ Cuanto mayor sea la variación entre grupos con respecto a la variación intragr
 Estas dispersiones las representamos con un gráfico BCV, y así podemos comprobar si la dispersión común representa realmente la dispersión existente entre los genes.
 
 ```{r echo=FALSE, fig.height=4.5, message=FALSE, warning=FALSE, tidy=TRUE, fig.cap='Gráfico BCV que muestra la dispersion entre los dstintos genes'}
-
 plotBCV(disp.all)
 ```
 
@@ -428,13 +431,11 @@ Generalmente, se considera óptimo para la detección de genes DE cuando el valo
 El modelo NB puede ampliarse con métodos de cuasi-verosimilitud (QL) para tener en cuenta la variabilidad específica de genes de fuentes biológicas y técnicas. Bajo el marco de QL, la tendencia de dispersión de NB se usa para describir la variabilidad biológica general en todos los genes, y la dispersión de QL recoge la variabilidad específica del gen por encima y por debajo del nivel general. En el enfoque QL, no se usan las dispersiones NB individuales (por etiqueta). La estimación de las dispersiones QL se realiza utilizando la  función `glmQLFit`, que nos devuelve un objeto con los valores estimados de los coeficientes GLM para cada gen. También contiene una serie de estadísticas empíricas de Bayes (EB) que incluyen la tendencia de dispersión QL, las estimaciones de dispersión QL exprimidas y los grados de libertad anteriores (df):
 
 ```{r echo=FALSE}
-
 fit <- glmQLFit(disp.all, robust=TRUE)
 head(fit$coefficients)
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, tidy=TRUE, fig.cap='Gráfico de la dispersión cuasi-verosimilitud de genes respecto la media log2 en cpm'}
-
 plotQLDisp(fit)
 summary(fit$df.prior)
 ```
@@ -443,8 +444,8 @@ Obtenemos unas estimaciones de df bajas, lo que indican que las dispersiones son
 
 Una vez calculados los factores de normalización y las estimación de las dispersiones, vamos a realizar las pruebas para determinar la expresión diferencial y buscar diferencias entre los tres grupos. La función que realiza estas pruebas es `exactTest()`:
 
-### Análisis de expresión diferencial
-#### Comparación entre los grupos ELI y NIT
+## Análisis de expresión diferencial
+### Comparación entre los grupos ELI y NIT
 
 Vamos a realizar para ello pruebas de razón de probabilidad para nuestros tejidos y observar las diferencias del grupo ELI *vs* NIT. La función `exactTest()` lleva a cabo pruebas usando la binomial negativa exacta. 
 
@@ -500,7 +501,7 @@ plotSmear(et, de.tags=detags)
 abline(h=c(-1,1), col="blue")
 ```
 
-#### Comparación entre los grupos SFI y NIT
+### Comparación entre los grupos SFI y NIT
 
 Realizamos los mismos pasos anteriores, pero comparando en este caso los grupos NIT y SFI, indicación que incluimos dentro de la función `exactTest` con el comando `pair`.
 
@@ -547,7 +548,7 @@ plotSmear(et.1, de.tags=detags.1)
 abline(h=c(-1,1), col="blue")
 ```
 
-#### Comparación entre los grupos SFI y ELI
+### Comparación entre los grupos SFI y ELI
 
 Realizamos los mismos pasos anteriores, pero comparando en este caso los grupos ELI y SFI, indicación que incluimos dentro de la función `exactTest` con el comando `pair`.
 
@@ -594,8 +595,8 @@ plotSmear(et.2, de.tags=detags.2)
 abline(h=c(-1,1), col="blue")
 ```
 
-## Análisis con DESeq2
-### DESeq Dataset
+# Análisis con DESeq2
+## DESeq Dataset
 
 Empleamos ahora el paquete `DESeq2`. El modelo probabilístico que utiliza este paquete es, al igual que `EdgeR`, la Binomial Negativa. Sin embargo, cada uno emplea su propia estrategia de normalización.
 
@@ -630,12 +631,12 @@ Este gráfico puede ser un diagnóstico útil. Algunas estimaciones genéticas s
 ```{r echo=FALSE, fig.height=4.5, message=FALSE, warning=FALSE, tidy=TRUE, fig.cap='Gráfico de las estimaciones de dispersión por gen junto con la relación media de dispersión ajustada'}
 
 # Plot dispersions
-#png("qc-dispersions.png", 1000, 1000, pointsize=20)
+png("qc-dispersions.png", 1000, 1000, pointsize=20)
 plotDispEsts(dds.1)
 ```
 
-### Análisis exploratorio y visualización
-#### Filtrado de datos
+## Análisis exploratorio y visualización
+### Filtrado de datos
 
 Al igual que con el paquete `edgeR` reducimos el tamaño del objeto y aumentamos la velocidad de nuestras funciones. Eliminamos por tanto las filas que no tienen o casi no tienen información sobre la cantidad de expresión génica. Para algunos conjuntos de datos, puede tener sentido realizar un filtrado adicional. Por ejemplo, se puede especificar que al menos 3 muestras tengan un conteo de 10 o más. Una recomendación para el número de muestras se establecería en el tamaño de grupo más pequeño. Dicha regla podría especificarse creando un vector lógico y sub-conjustando el ddsl anterior:
 
@@ -653,7 +654,7 @@ dds.2 <- dds.1[keep,]
 nrow(dds.2)
 ```
 
-#### Transformación de los datos para su visualización
+### Transformación de los datos para su visualización
 
 Aunque en el paquete DESeq2 se opera con conteos, utilizando distribuciones discretas, para la realización de otros análisis como pueden ser la visualización o el agrupamiento, es útil trabajar con versiones transformadas de los datos de conteo. Debido a esto, se ha realizado una transformación logarítmica regularizada (rlog) y la hemos comparado con la transformación que nos da la función `vst` (mucho más rápida) que emplea una transformación estabilizadora de varianza.
 
@@ -682,7 +683,7 @@ plot(assay(rld))
 plot(assay(vsdata))
 ```
 
-#### Distancia entre las muestras
+### Distancia entre las muestras
 
 De forma complementaria al estudio de los datos, se ha podido realizar un análisis que indique si existe alguna relación entre las muestras, es decir, si hay algunas similitudes entre ellas, mediante un análisis de distancias, usando la función `dist`.
 
@@ -697,7 +698,7 @@ mycols <- brewer.pal(8, "Dark2")[1:length(unique(condition))]
 # heatmap de los valores transformados de las muestras
 sampleDists <- as.matrix(dist(t(assay(rld))))
 library(gplots)
-#png("qc-heatmap-samples.png", w=1000, h=1000, pointsize=20)
+png("qc-heatmap-samples.png", w=1000, h=1000, pointsize=20)
 heatmap.2(as.matrix(sampleDists), key=F, trace="none",col=colorpanel(100, "black", 
                                                                      "white"),
           ColSideColors=mycols[condition], RowSideColors=mycols[condition],margin=c(10, 10),
@@ -717,7 +718,7 @@ anno <- as.data.frame(colData(vsdata)[, c("condition", "sizeFactor")])
 pheatmap(mat, annotation_col = anno)
 ```
 
-#### Análisis de componentes principales
+### Análisis de componentes principales
 
 De forma complementaria al análisis de agrupamientos, se ha analizado también la similitud entre muestras mediante el análisis de componentes principales (PCA),con la función `plotPCA`. En esta gráfica, las muestras se proyectan de manera que se extienden en dos direcciones que explican la mayoría de las diferencias entre ellas. El eje x es la dirección que más separa los puntos de datos, el eje y es una dirección ortogonal a la primera, que es la segunda que más separa los datos. El porcentaje de la varianza total que está contenida en la dirección se puede ver en la etiqueta del eje.
 
@@ -725,6 +726,8 @@ De forma complementaria al análisis de agrupamientos, se ha analizado también 
 
 DESeq2::plotPCA(rld, intgroup="condition")
 ```
+
+Los grupos aparecen algo separados pero el porcentaje de variabilidad explicado por las dos primeras componentes sugiere que pueden ser muy explicativas.
 
 ```{r echo=FALSE, fig.height=4, message=FALSE, warning=FALSE, tidy=TRUE, fig.cap='Análisis de componentes principales entre las muestras transformadas según la varianza'}
 
@@ -765,7 +768,7 @@ rld_pca <- function (rld, intgroup = "condition", ntop = 500, colors=NULL,
                                     cex=textcx))
   legend(legendpos, legend=levels(fac), col=colors, pch=20)
 }
-#png("qc-pca.png", 1000, 1000, pointsize=20)
+png("qc-pca.png", 1000, 1000, pointsize=20)
 rld_pca(rld, colors=mycols, intgroup="condition", xlim=c(-75, 35))
 ```
 
@@ -785,13 +788,13 @@ plotCounts(dds.2, gene="ENSG00000177721", intgroup="condition")
 plotCounts(dds.2, gene="ENSG00000264940", intgroup="condition")
 ```
 
-### Análisis de expresión diferencial
+## Análisis de expresión diferencial
 
 Para comparar los tres grupos por parejas, se ha utilizado la función `results`, a la que se le ha añadido un contraste (por ejemplo, contrast = c("condition", "ELI", "SIF")) para seleccionar las muestras que queremos comparar. Así, se realizaron tres comparativas: ELI *vs* SFI, SFI *vs* NIT y NIT *vs* ELI.
 
 Mediante esta función, se calcula el `log2FoldChange`, que es la estimación del efecto. Indica cuánto cambia la expresión del gen de una muestra respecto a la otra. Además, se realiza para cada gen una prueba de hipótesis para ver si existe una variabilidad experimental, con el p-valor. Posterior a la visualización de los resultados, se han ajustado los datos al estudio, estableciendo un ajuste del p-valor (padj) menor a 0.05. Este p-valor se obtiene mediante el método de Benjamini-Hochberg, indicando el false discovery rate (FDR).
 
-#### ELI *vs* NIT
+### ELI *vs* NIT
 
 Para identificar los genes más diferencialmente expresados(genes DE), echamos un vistazo a la tabla de resultados. Como la variable *dds* contiene diferentes comparaciones, es necesario extraer la comparación de interés para proceder con las comparaciones entre los tres grupos.
 
@@ -860,7 +863,7 @@ Si consideramos que una fracción del 10% de falsos positivos es aceptable, pode
 sum(res1$padj < 0.1, na.rm=TRUE)
 ```
 
-*Subconjustamos* la tabla de resultados a estos genes y luego los clasificamos por la estimación del log2change para obtener los genes significativos con la regulación descendente mínima:
+*Subconjuntamos* la tabla de resultados a estos genes y luego los clasificamos por la estimación del log2change para obtener los genes significativos con la regulación descendente mínima:
 
 ```{r echo=FALSE}
 resSig1 <- subset(res1, padj < 0.01)
@@ -873,7 +876,7 @@ y con la regulación up más elevada:
 head(resSig1[ order(resSig1$log2FoldChange, decreasing = TRUE), ])
 ```
 
-Veamos el volcano plot correspondiente:
+Los volcano-plots permiten visualizar si hay muchos o pocos genes con un gran fold-change y significativamente expresados o si este núumero es bajo. Estos gráaficos representan en abscisas los cambios de expresión en escala logarítmica y en ordenadas el "menos logaritmo" del p-valor.
 
 ```{r echo=FALSE, fig.height=4.5, message=FALSE, warning=FALSE, tidy=TRUE, fig.cap='volcano plot que visualiza los rangos del p-value y foldchange entre los grupos ELI vs. NIT'}
 
@@ -902,12 +905,11 @@ maplot <- function (res, thresh=0.05, labelsig=TRUE, textcx=0.6, ...) {
                                           cex=textcx, col=2))
   }
 }
-#png("diffexpr-maplot.png", 1500, 1000, pointsize=20)
+png("diffexpr-maplot.png", 1500, 1000, pointsize=20)
 maplot(resOrdered1, main="MA Plot")
-
 ```
 
-#### SFI *vs* NIT
+### SFI *vs* NIT
 
 Creamos el objeto `res` para comparar ambos grupos y vemos el resumen y la tabla de los resultados,  fijando el umbral de la tasa de descubrimiento falso a un \alpha = 0.05, al igual que en el caso anterior:
 
@@ -998,11 +1000,11 @@ maplot <- function (res, thresh=0.05, labelsig=TRUE, textcx=0.6, ...) {
                                           cex=textcx, col=2))
   }
 }
-#png("diffexpr-maplot.png", 1500, 1000, pointsize=20)
+png("diffexpr-maplot.png", 1500, 1000, pointsize=20)
 maplot(resOrdered2, main="MA Plot")
 ```
 
-#### SFI *vs* ELI
+### SFI *vs* ELI
 
 Vemos la tabla de resultados con aquellos genes que tienen un menor p-value y por tanto, pueden que esten diferencialmente expresados. Fijamos el umbral de la tasa de descubrimiento falso a un \alpha = 0.05, al igual que en el caso anterior. Como hemos visto esta tabla proporciona los valores básicos a través de muestras, log2 fold changes, errores estándar, test estadísticos, valores p y valores p ajustados:
 
@@ -1091,12 +1093,12 @@ maplot <- function (res, thresh=0.05, labelsig=TRUE, textcx=0.6, ...) {
                                           cex=textcx, col=2))
   }
 }
-#png("diffexpr-maplot.png", 1500, 1000, pointsize=20)
+png("diffexpr-maplot.png", 1500, 1000, pointsize=20)
 maplot(resOrdered3, main="MA Plot")
 
 ```
 
-### Gráfico de diferencia de medias
+## Gráfico de diferencia de medias
 
 Una gráfica de diferencia de medias (MA-PLOT) permite visualizar la distribución de los coeficientes estimados en el modelo, como pueden ser las comparaciones entre genes. En el eje y se sitúa el valor del LFC, mientras que en el eje x se sitúan las medias de los counts normalizados. En DESeq2, la función plotMA muestra los cambios de pliegue log2 atribuibles a una variable dada sobre la media de los recuentos normalizados para todas las muestras en el `DESeqDataSet` . Los puntos serán de color azul si el valor p ajustado es menor que 0.1. Los puntos que se caen de la ventana se trazan como triángulos abiertos que apuntan hacia arriba o hacia abajo:
 
@@ -1115,20 +1117,20 @@ abline(h=c(-1,1), col="dodgerblue", lwd=2)
 Tabla 1: Resutados edgeR
 
 | Datos | **ELI vs. NIT** |  **SFI vs. NIT** |  **SFI vs. ELI** |
-----------------------| ----------------------| ----------------------|
-*significativos* | 15 % | 0.6 % | 15 % |
-*no significativos* | 33996 | 39743 | 34356 |
-*sobreexpresados* | 2042 | 221 | 2282 |
-*infraeexpresados* | 3933 | 7 | 3333 |
+| ------------------| ------------------| ------------------| ------------------|
+| *significativos* | 15 % | 0.6 % | 15 % |
+| *no significativos* | 33996 | 39743 | 34356 |
+| *sobreexpresados* | 2042 | 221 | 2282 |
+| *infraeexpresados* | 3933 | 7 | 3333 |
 
 Tabla 2: Resutados DESeq2
 
 | Datos | **ELI vs. NIT** |  **SFI vs. NIT** |  **SFI vs. ELI** |
-----------------------| ----------------------| ----------------------|
-*significativos* | 17.4 % | 0.7 % | 17 % |
-*no significativos* | 242564 | 26693  | 23211 |
-*sobreexpresados* | 4605 | 280 | 2284 |
-*infraeexpresados* | 2653 | 23 | 4119 |
+| ------------------| ------------------| ------------------| ------------------|
+| *significativos* | 17.4 % | 0.7 % | 17 % |
+| *no significativos* | 242564 | 26693  | 23211 |
+| *sobreexpresados* | 4605 | 280 | 2284 |
+| *infraeexpresados* | 2653 | 23 | 4119 |
 
 A pesar que número de genes empleado en cada estudio, no es el mismo, ya que hemos empleado distinto metodo de filtrado y eliminacion de genes poco significativos (sólo se diferencian en 1500 genes), los resultados obtenidos respecto a al porcentaje de genes DE (diferencialmente expresados) es muy similar en ambos casos.
 
@@ -1140,9 +1142,12 @@ Ya que según los resultados en porcentajes y números de las dos tablas anterir
 
 ```{r echo=FALSE}
 (top)[1:10,-1]
+```
 
+```{r echo=FALSE}
 (top.2)[1:10,-1]
 ```
+
 
 # Discusión
 
@@ -1511,7 +1516,7 @@ mycols <- brewer.pal(8, "Dark2")[1:length(unique(condition))]
 # heatmap de los valores transformados de las muestras
 sampleDists <- as.matrix(dist(t(assay(rld))))
 library(gplots)
-#png("qc-heatmap-samples.png", w=1000, h=1000, pointsize=20)
+png("qc-heatmap-samples.png", w=1000, h=1000, pointsize=20)
 heatmap.2(as.matrix(sampleDists), key=F, trace="none",col=colorpanel(100, "black", 
                                                                      "white"),
           ColSideColors=mycols[condition], RowSideColors=mycols[condition],margin=c(10, 10),
@@ -1566,7 +1571,7 @@ rld_pca <- function (rld, intgroup = "condition", ntop = 500, colors=NULL,
                                     cex=textcx))
   legend(legendpos, legend=levels(fac), col=colors, pch=20)
 }
-#png("qc-pca.png", 1000, 1000, pointsize=20)
+png("qc-pca.png", 1000, 1000, pointsize=20)
 rld_pca(rld, colors=mycols, intgroup="condition", xlim=c(-75, 35))
 ```
 
@@ -1653,7 +1658,7 @@ maplot <- function (res, thresh=0.05, labelsig=TRUE, textcx=0.6, ...) {
                                           cex=textcx, col=2))
   }
 }
-#png("diffexpr-maplot.png", 1500, 1000, pointsize=20)
+png("diffexpr-maplot.png", 1500, 1000, pointsize=20)
 maplot(resOrdered1, main="MA Plot")
 ```
 
@@ -1716,7 +1721,7 @@ maplot <- function (res, thresh=0.05, labelsig=TRUE, textcx=0.6, ...) {
                                           cex=textcx, col=2))
   }
 }
-#png("diffexpr-maplot.png", 1500, 1000, pointsize=20)
+png("diffexpr-maplot.png", 1500, 1000, pointsize=20)
 maplot(resOrdered2, main="MA Plot")
 ```
 
@@ -1777,7 +1782,7 @@ maplot <- function (res, thresh=0.05, labelsig=TRUE, textcx=0.6, ...) {
                                           cex=textcx, col=2))
   }
 }
-#png("diffexpr-maplot.png", 1500, 1000, pointsize=20)
+png("diffexpr-maplot.png", 1500, 1000, pointsize=20)
 maplot(resOrdered3, main="MA Plot")
 
 ```
@@ -1793,7 +1798,7 @@ DESeq2::plotMA(res3, main="MA-plot DESeq2 SFI vs. ELI", ylim=c(-2,2))
 abline(h=c(-1,1), col="dodgerblue", lwd=2)
 ```
 
-# Resultados
+### Resultados
 
 ```{r echo=FALSE}
 (top)[1:10,-1]
